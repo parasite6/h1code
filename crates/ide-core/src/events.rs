@@ -32,6 +32,8 @@ pub enum Event {
     },
     TestRunStarted { id: String },
     TestRunFinished { id: String, passed: usize, failed: usize },
+    /// Background search index status (indexing / ready / capped / error).
+    SearchIndexStatus(crate::search_index::SearchIndexStatus),
     Log { level: LogLevel, message: String },
 }
 

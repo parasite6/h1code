@@ -401,6 +401,138 @@ body.resizing #bottom-content {
   font-size: 11.5px;
 }
 
+/* Search panel */
+.search-panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+.search-input-row input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-input, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  outline: none;
+}
+.search-input-row input:focus {
+  border-color: var(--accent-color);
+}
+.search-options {
+  display: flex;
+  gap: 6px;
+}
+.search-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.search-option:has(input:checked) {
+  color: var(--text-main);
+  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+}
+.search-option input {
+  display: none;
+}
+.search-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-height: 14px;
+  padding: 0 2px;
+}
+.search-results {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.search-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 8px 2px;
+  margin: 0;
+}
+.search-section {
+  margin-bottom: 10px;
+}
+.search-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+.search-result-row,
+.search-file-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.search-result-row:hover,
+.search-file-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+}
+.search-result-name {
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+.search-result-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+  font-size: 11px;
+}
+.search-content-row {
+  padding-left: 10px;
+}
+.search-result-line {
+  color: var(--text-dark, #888);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.search-result-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.search-result-snippet mark {
+  background: rgba(255, 200, 0, 0.25);
+  color: var(--text-main);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.search-file-group {
+  margin-bottom: 4px;
+}
+
 /* Polish Explorer Node Rows with SVG Icon Alignment */
 .file-tree-node {
   display: flex;

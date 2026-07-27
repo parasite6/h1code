@@ -17,6 +17,7 @@ pub mod python_env;
 pub mod pytest;
 pub mod ruff;
 pub mod search;
+pub mod search_index;
 pub mod settings;
 pub mod workspace;
 
