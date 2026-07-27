@@ -234,7 +234,14 @@ export function mountTerminal(host: HTMLElement): TerminalBinding {
         // Must go through the PTY. Local term.write + Enter desyncs the cursor
         // and the shell redraws over / erases the message. A shell comment
         // leaves the text on its own line and yields a fresh prompt below.
-        const safe = text.replace(/[\r\n#]/g, " ").trim();
+        // Strip zsh glob/meta so NOMATCH / file-attribute errors can't fire
+        // even when INTERACTIVE_COMMENTS is off.
+        const safe = text
+          .replace(/[\r\n#]/g, " ")
+          .replace(/[\[\]*?(){}<>|&;]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!safe) return;
         void ipc.ptyWrite(sessionId, `\x15# ${safe}\r`);
         return;
       }
