@@ -13,6 +13,7 @@ import { mountExplorer, type ScratchEntry, type ScratchFile, type ScratchFolder 
 import { confirmSave, confirmDialog, promptName, type SaveDecision } from "./modal";
 import { mountTerminal } from "./terminal";
 import { mountProblems, type ProblemEntry } from "./problems";
+import { mountSearch } from "./search";
 import {
   chooseRunTarget,
   rememberRunTarget,
@@ -67,6 +68,7 @@ async function bootstrap() {
   const explorer = mountExplorer($("explorer-tree"));
   const terminal = mountTerminal($("terminal"));
   const problems = mountProblems($("problems"));
+  const search = mountSearch($("panel-search"));
   const editorHost = $("editor");
   const editorEmptyState = $("editor-empty-state");
   const runButton = $("btn-run");
@@ -684,11 +686,7 @@ async function bootstrap() {
       currentWorkspace = info;
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
-      terminal.log(
-        `Workspace opened: ${info.root}` +
-          (info.python ? ` (python: ${info.python.version ?? "?"})` : ""),
-        { newPrompt: true }
-      );
+      search.setWorkspaceRoot(info.root);
       await addToRecentProjects(info.root, info.name);
       if (restoreLastActiveFile) {
         await restoreWorkspaceTabs(info.root);
@@ -760,6 +758,7 @@ async function bootstrap() {
       children: [],
     };
     explorer.setScratchRoot(scratchWorkspace.name, scratchWorkspace.rootPath, scratchWorkspace.children);
+    search.setWorkspaceRoot(null);
     updateWorkspaceUi(null);
     showEditor(false);
   }
@@ -1541,6 +1540,13 @@ async function bootstrap() {
     showBottom("terminal", false); // hide problems so the editor jump is visible
   });
 
+  search.onOpenFile(async (path, line, col) => {
+    await tabs.open(path);
+    if (line != null) {
+      editor.jumpTo(line, col ?? 1);
+    }
+  });
+
   const btnEmptyOpenFolder = $("btn-empty-open-folder");
   if (btnEmptyOpenFolder) {
     btnEmptyOpenFolder.onclick = async () => {
@@ -1681,6 +1687,7 @@ async function bootstrap() {
         .querySelectorAll<HTMLElement>(".sidebar-view")
         .forEach((v) => v.classList.add("hidden"));
       $(`panel-${mode}`).classList.remove("hidden");
+      if (mode === "search") search.focus();
     };
   });
 
@@ -1697,6 +1704,7 @@ async function bootstrap() {
   function routeEvent(evt: CoreEvent) {
     terminal.applyEvent(evt);
     explorer.applyEvent(evt);
+    search.applyEvent(evt);
 
     if (evt.kind === "process_exited" && evt.id === activePtyId) {
       activePtyId = null;
@@ -1728,6 +1736,7 @@ async function bootstrap() {
       currentWorkspace = null;
       scratchWorkspace = null;
       explorer.clearScratchRoot();
+      search.setWorkspaceRoot(null);
       diagnostics.clear();
       editor.setDiagnostics([]);
       refreshProblems();
@@ -1736,8 +1745,12 @@ async function bootstrap() {
     }
 
     if (evt.kind === "log") {
-      const prefix = evt.level === "error" ? "ERR" : evt.level === "warn" ? "WARN" : "INFO";
-      terminal.log(`[${prefix}] ${evt.message}`, { newPrompt: true });
+      // Only surface warnings/errors in the terminal. Info/debug (pyright started,
+      // search index ready, …) used to be injected as `# …` shell comments and
+      // tripped zsh on globs like `[INFO]` / `(python: …)`.
+      if (evt.level !== "warn" && evt.level !== "error") return;
+      const prefix = evt.level === "error" ? "ERR" : "WARN";
+      terminal.log(`${prefix}: ${evt.message}`, { newPrompt: true });
     }
   }
 

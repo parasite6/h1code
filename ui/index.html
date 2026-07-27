@@ -101,7 +101,29 @@
               <div class="sidebar-header">
                 <span>Search</span>
               </div>
-              <p class="placeholder">Search — placeholder.</p>
+              <div class="search-panel-body">
+                <div class="search-input-row">
+                  <input
+                    id="search-query"
+                    type="search"
+                    placeholder="Search files, folders, and contents"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
+                <div class="search-options">
+                  <label class="search-option" title="Match Case">
+                    <input type="checkbox" id="search-case" />
+                    <span>Aa</span>
+                  </label>
+                  <label class="search-option" title="Use Regular Expression">
+                    <input type="checkbox" id="search-regex" />
+                    <span>.*</span>
+                  </label>
+                </div>
+                <div id="search-status" class="search-status"></div>
+                <div id="search-results" class="search-results"></div>
+              </div>
             </div>
             <div id="panel-run" class="sidebar-view hidden">
               <div class="sidebar-header">

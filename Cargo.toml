@@ -32,6 +32,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 parking_lot = "0.12"
 crossbeam-channel = "0.5"
 walkdir = "2"
+tantivy = "0.22"
+regex = "1"
 tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

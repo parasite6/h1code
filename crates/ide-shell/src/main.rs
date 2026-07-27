@@ -19,6 +19,8 @@ use ide_core::pty::{PtyManager, PtySpec};
 use ide_core::pyright::PyrightManager;
 use ide_core::python_env;
 use ide_core::ruff;
+use ide_core::search::{search_workspace, SearchQuery, SearchResponse};
+use ide_core::search_index::{SearchIndexService, SearchIndexStatus};
 use ide_core::settings::SettingsStore;
 use ide_core::workspace::{Workspace, WorkspaceInfo};
 
@@ -29,6 +31,7 @@ struct AppState {
     runner: ProcessRunner,
     pty: PtyManager,
     pyright: PyrightManager,
+    search_index: SearchIndexService,
     settings: SettingsStore,
 }
 
@@ -46,6 +49,7 @@ fn main() {
     let runner = ProcessRunner::new(bus.clone());
     let pty = PtyManager::new(bus.clone());
     let pyright = PyrightManager::new(bus.clone());
+    let search_index = SearchIndexService::new(bus.clone());
     let settings = SettingsStore::new(SettingsStore::default_user_path())
         .expect("failed to initialize settings store");
 
@@ -58,6 +62,7 @@ fn main() {
             runner,
             pty,
             pyright,
+            search_index,
             settings,
         })
         .setup(move |app| {
@@ -88,6 +93,8 @@ fn main() {
             cmd_fs_create_dir,
             cmd_fs_rename,
             cmd_fs_remove,
+            cmd_search,
+            cmd_search_status,
             cmd_pty_open,
             cmd_python_run,
             cmd_process_kill,
@@ -114,6 +121,7 @@ fn to_err<E: std::fmt::Display>(e: E) -> String {
 fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<WorkspaceInfo, String> {
     // Tear down any prior session before swapping workspaces.
     state.pyright.stop();
+    state.search_index.stop();
     let info = state.workspace.open(&path).map_err(to_err)?;
     state.settings.bind_workspace(&info.root).ok();
     state.bus.publish(CoreEvent::WorkspaceOpened {
@@ -130,6 +138,9 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
             let _ = fs.watch(&root);
         });
     }
+
+    // Background search indexer (paths + content, size-capped).
+    state.search_index.start(&info.root);
 
     // Start Pyright off the command path. `initialize` is a blocking LSP
     // round-trip; keeping it here made opens feel laggy even after async IPC.
@@ -440,6 +451,24 @@ fn cmd_fs_rename(state: State<'_, AppState>, from: String, to: String) -> Result
 #[tauri::command(async)]
 fn cmd_fs_remove(state: State<'_, AppState>, path: String) -> Result<(), String> {
     state.fs.remove(Path::new(&path)).map_err(to_err)
+}
+
+// ---------- Search ----------
+
+#[tauri::command(async)]
+fn cmd_search(state: State<'_, AppState>, query: SearchQuery) -> Result<SearchResponse, String> {
+    let root = state
+        .workspace
+        .current()
+        .ok_or_else(|| "workspace not open".to_string())?
+        .root;
+    let index = state.search_index.index();
+    search_workspace(&root, index, &query).map_err(to_err)
+}
+
+#[tauri::command]
+fn cmd_search_status(state: State<'_, AppState>) -> Result<SearchIndexStatus, String> {
+    Ok(state.search_index.status())
 }
 
 // ---------- Python run ----------

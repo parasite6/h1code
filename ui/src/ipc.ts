@@ -70,7 +70,59 @@ export type CoreEvent =
       source: string;
       items: CoreDiagnostic[];
     }
+  | {
+      kind: "search_index_status";
+      phase: SearchIndexPhase;
+      root: string | null;
+      files_indexed: number;
+      dirs_indexed: number;
+      content_indexed: number;
+      index_bytes: number;
+      max_index_bytes: number;
+      message: string | null;
+    }
   | { kind: "log"; level: "debug" | "info" | "warn" | "error"; message: string };
+
+export type SearchIndexPhase = "idle" | "indexing" | "ready" | "capped" | "error";
+
+export interface SearchIndexStatus {
+  phase: SearchIndexPhase;
+  root: string | null;
+  files_indexed: number;
+  dirs_indexed: number;
+  content_indexed: number;
+  index_bytes: number;
+  max_index_bytes: number;
+  message: string | null;
+}
+
+export interface SearchQuery {
+  pattern: string;
+  literal?: boolean;
+  case_insensitive?: boolean;
+  include_hidden?: boolean;
+  max_results?: number | null;
+}
+
+export interface PathHit {
+  path: string;
+  name: string;
+  is_dir: boolean;
+}
+
+export interface SearchHit {
+  path: string;
+  line_number: number;
+  line: string;
+  start: number;
+  end: number;
+}
+
+export interface SearchResponse {
+  files: PathHit[];
+  folders: PathHit[];
+  content: SearchHit[];
+}
 
 export const ipc = {
   workspaceOpen: (path: string) =>
@@ -107,6 +159,9 @@ export const ipc = {
   fsRename: (from: string, to: string) =>
     invoke<void>("cmd_fs_rename", { from, to }),
   fsRemove: (path: string) => invoke<void>("cmd_fs_remove", { path }),
+  search: (query: SearchQuery) =>
+    invoke<SearchResponse>("cmd_search", { query }),
+  searchStatus: () => invoke<SearchIndexStatus>("cmd_search_status"),
   pythonRun: (
     file: string,
     args: string[] = [],
