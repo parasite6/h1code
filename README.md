@@ -30,27 +30,33 @@ Commands flow UI → Tauri invoke → `ide-core`. The UI stays thin; business lo
 
 - **Rust** 1.80+ (workspace `rust-version`)
 - **Node.js** + npm (for `ui/`)
-- **Tauri 2** system dependencies for your OS ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/))
-- Optional for Python features: a Python interpreter and [Ruff](https://docs.astral.sh/ruff/) on `PATH`
+- **Tauri CLI** 2.x (`npm install -g @tauri-apps/cli@^2`) plus [system prerequisites](https://v2.tauri.app/start/prerequisites/)
+- Optional for Python features: a Python interpreter, then `pip install -r requirements.txt` (Ruff, Pyright, pytest, debugpy)
 
 ## Quick start
 
 ```bash
+# Optional Python tooling (venv recommended)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
 # Frontend deps
 cd ui && npm install && cd ..
 
-# Dev: Tauri starts Vite via beforeDevCommand (port 5173)
-cargo run -p ide-shell
+# Dev (from the Tauri app crate; starts Vite on port 5173 via beforeDevCommand)
+cd crates/ide-shell
+tauri dev
 ```
 
-Production-style build:
+Production build:
 
 ```bash
-cd ui && npm run build && cd ..
-cargo build -p ide-shell --release
+cd crates/ide-shell
+tauri build
 ```
 
-The built UI is served from `ui/dist` (`crates/ide-shell/tauri.conf.json`).
+`tauri` runs the configured `beforeDevCommand` / `beforeBuildCommand` and loads the UI from `ui/` / `ui/dist` per `crates/ide-shell/tauri.conf.json`.
 
 ## CLI (`ide-cli`)
 
@@ -74,6 +80,7 @@ See `crates/ide-cli/src/main.rs` for the full command list.
 ```
 CustomIDE/
 ├── Cargo.toml              # workspace
+├── requirements.txt        # optional Python tooling
 ├── crates/
 │   ├── ide-core/           # engine library
 │   ├── ide-shell/          # Tauri binary (AND-IDE)

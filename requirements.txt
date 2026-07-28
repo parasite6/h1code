@@ -1,0 +1,10 @@
+# Optional Python tooling used by AND-IDE (lint, diagnostics, tests, debug).
+# Install into a venv at the project root (preferred) or your user environment:
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+
+ruff>=0.6
+pyright>=1.1
+pytest>=8.0
+debugpy>=1.8
