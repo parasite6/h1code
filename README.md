@@ -2,7 +2,7 @@
 
 A focused, lightweight desktop IDE aimed at HTML development. Built as a Rust core with a Tauri + TypeScript shell.
 
-> **Status:** Still in active development. Currently stable only on **Linux**; other platforms are unsupported or untested.
+> **Status:** Still in active development. Currently stable only on **Linux**; may run on Windows (project originated there) but this is untested — other platforms are unsupported or untested.
 
 The product is branded for HTML; the current engine still includes Python run/lint tooling from earlier work, and that surface remains available while the HTML-first direction continues.
 
