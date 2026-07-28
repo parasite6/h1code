@@ -8,5 +8,7 @@ ruff>=0.6
 pyright>=1.1.411
 ruff>=0.16.0
 pyright>=1.1
+pytest>=9.1.1
+debugpy>=1.8
 pytest>=8.0
 debugpy>=1.8.21
