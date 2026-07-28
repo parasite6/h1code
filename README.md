@@ -87,4 +87,4 @@ CustomIDE/
 
 ## License
 
-MIT
+None yet 😅️
