@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Keeps Python packages in requirements.txt updated
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Keeps GitHub Actions actions updated (e.g. actions/checkout@v4)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
