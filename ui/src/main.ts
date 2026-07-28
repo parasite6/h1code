@@ -625,41 +625,38 @@ async function bootstrap() {
   function updateWorkspaceUi(info: WorkspaceInfo | null) {
     const workspaceLabel = $("workspace-label");
     const pythonSpan = $("statusbar-python-text");
-    if (scratchWorkspace) {
-      if (workspaceLabel) {
-        workspaceLabel.innerHTML = `
+    const folderSvg = `
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <span>${scratchWorkspace.name} (unsaved)</span>
-        `;
-      }
-      if (pythonSpan) {
-        pythonSpan.textContent = "Scratch workspace";
-      }
-    } else if (info) {
-      if (workspaceLabel) {
-        workspaceLabel.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <span>${info.name}</span>
-        `;
-      }
-      if (pythonSpan) {
-        pythonSpan.textContent = info.python ? `${info.python.interpreter} (${info.python.version ?? "?"})` : "No python";
-      }
-    } else {
-      if (workspaceLabel) {
-        workspaceLabel.innerHTML = `
+          </svg>`;
+    const emptySvg = `
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
             <line x1="8" y1="21" x2="16" y2="21"></line>
             <line x1="12" y1="17" x2="12" y2="21"></line>
-          </svg>
-          No workspace
-        `;
+          </svg>`;
+
+    function setWorkspaceLabel(svgMarkup: string, labelText: string) {
+      if (!workspaceLabel) return;
+      // Keep static SVG via innerHTML; never interpolate user-controlled names.
+      workspaceLabel.innerHTML = svgMarkup;
+      const span = document.createElement("span");
+      span.textContent = labelText;
+      workspaceLabel.appendChild(span);
+    }
+
+    if (scratchWorkspace) {
+      setWorkspaceLabel(folderSvg, `${scratchWorkspace.name} (unsaved)`);
+      if (pythonSpan) {
+        pythonSpan.textContent = "Scratch workspace";
       }
+    } else if (info) {
+      setWorkspaceLabel(folderSvg, info.name);
+      if (pythonSpan) {
+        pythonSpan.textContent = info.python ? `${info.python.interpreter} (${info.python.version ?? "?"})` : "No python";
+      }
+    } else {
+      setWorkspaceLabel(emptySvg, "No workspace");
       if (pythonSpan) {
         pythonSpan.textContent = "No python";
       }
