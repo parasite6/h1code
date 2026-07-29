@@ -54,7 +54,7 @@ impl PtyManager {
     pub fn open(&self, spec: PtySpec) -> IdeResult<String> {
         let pty_system = NativePtySystem::default();
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             cols = spec.cols,
             rows = spec.rows,
             cwd = ?spec.cwd,
@@ -103,7 +103,7 @@ impl PtyManager {
             .take_writer()
             .map_err(|e| IdeError::other(format!("pty writer: {e}")))?;
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             program = %program,
             cwd = ?spec.cwd,
             cols = spec.cols,
@@ -119,7 +119,7 @@ impl PtyManager {
         }));
         self.sessions.lock().insert(id.clone(), session);
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             id = %id,
             program = %program,
             "PtyManager::open session inserted"
@@ -153,7 +153,7 @@ impl PtyManager {
 
     pub fn write(&self, id: &str, data: &[u8]) -> IdeResult<()> {
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             id = %id,
             bytes = data.len(),
             data = %String::from_utf8_lossy(data).escape_debug(),
@@ -163,7 +163,7 @@ impl PtyManager {
             let sessions = self.sessions.lock();
             let session = sessions.get(id).cloned();
             tracing::info!(
-                target: "customide::pty",
+                target: "h1code::pty",
                 id = %id,
                 exists = session.is_some(),
                 sessions = sessions.len(),
@@ -174,7 +174,7 @@ impl PtyManager {
         let mut s = session.lock();
         if let Err(err) = s.writer.write_all(data) {
             tracing::warn!(
-                target: "customide::pty",
+                target: "h1code::pty",
                 id = %id,
                 error = %err,
                 "PtyManager::write write_all failed"
@@ -182,14 +182,14 @@ impl PtyManager {
             return Err(err.into());
         }
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             id = %id,
             bytes = data.len(),
             "PtyManager::write write_all succeeded"
         );
         if let Err(err) = s.writer.flush() {
             tracing::warn!(
-                target: "customide::pty",
+                target: "h1code::pty",
                 id = %id,
                 error = %err,
                 "PtyManager::write flush failed"
@@ -197,7 +197,7 @@ impl PtyManager {
             return Err(err.into());
         }
         tracing::info!(
-            target: "customide::pty",
+            target: "h1code::pty",
             id = %id,
             "PtyManager::write flush succeeded"
         );

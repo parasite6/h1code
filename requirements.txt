@@ -1,4 +1,4 @@
-# Optional Python tooling used by AND-IDE (lint, diagnostics, tests, debug).
+# Optional Python tooling used by <h1code> (lint, diagnostics, tests, debug).
 # Install into a venv at the project root (preferred) or your user environment:
 #   python3 -m venv .venv
 #   source .venv/bin/activate

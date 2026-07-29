@@ -192,7 +192,7 @@ const MAX_RECENT_PROJECTS: usize = 4;
 fn cmd_recent_projects_get(state: State<'_, AppState>) -> Result<Vec<RecentProject>, String> {
     let Some(value) = state.settings.get_user("recentProjects") else {
         tracing::debug!(
-            target: "customide::recent_projects",
+            target: "h1code::recent_projects",
             settings_path = %state.settings.user_path().display(),
             raw_count = 0,
             returned_count = 0,
@@ -205,7 +205,7 @@ fn cmd_recent_projects_get(state: State<'_, AppState>) -> Result<Vec<RecentProje
     projects.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));
     projects.truncate(MAX_RECENT_PROJECTS);
     tracing::debug!(
-        target: "customide::recent_projects",
+        target: "h1code::recent_projects",
         settings_path = %state.settings.user_path().display(),
         raw_count,
         returned_count = projects.len(),
@@ -238,7 +238,7 @@ fn cmd_recent_projects_set(
     }
     let value = serde_json::to_value(&clean).map_err(to_err)?;
     tracing::debug!(
-        target: "customide::recent_projects",
+        target: "h1code::recent_projects",
         settings_path = %state.settings.user_path().display(),
         incoming_count,
         saved_count = clean.len(),
@@ -386,7 +386,7 @@ fn cmd_fs_list(state: State<'_, AppState>, path: String) -> Result<Vec<DirEntry>
     let start = std::time::Instant::now();
     let res = state.fs.list_dir(Path::new(&path)).map_err(to_err);
     tracing::info!(
-        target: "customide::fs",
+        target: "h1code::fs",
         path = %path,
         ok = res.is_ok(),
         elapsed_ms = start.elapsed().as_millis() as u64,
@@ -400,7 +400,7 @@ fn cmd_fs_read(state: State<'_, AppState>, path: String) -> Result<String, Strin
     let start = std::time::Instant::now();
     let res = state.fs.read(Path::new(&path)).map_err(to_err);
     tracing::info!(
-        target: "customide::fs",
+        target: "h1code::fs",
         path = %path,
         ok = res.is_ok(),
         bytes = res.as_ref().map(|s| s.len()).unwrap_or(0),
@@ -415,7 +415,7 @@ fn cmd_fs_read_lossy(state: State<'_, AppState>, path: String) -> Result<String,
     let start = std::time::Instant::now();
     let res = state.fs.read_lossy(Path::new(&path)).map_err(to_err);
     tracing::info!(
-        target: "customide::fs",
+        target: "h1code::fs",
         path = %path,
         ok = res.is_ok(),
         bytes = res.as_ref().map(|s| s.len()).unwrap_or(0),
@@ -587,7 +587,7 @@ fn cmd_process_kill(state: State<'_, AppState>, id: String) -> Result<bool, Stri
 #[tauri::command(async)]
 fn cmd_pty_write(state: State<'_, AppState>, id: String, data: String) -> Result<(), String> {
     tracing::debug!(
-        target: "customide::pty",
+        target: "h1code::pty",
         id = %id,
         bytes = data.len(),
         data = %data.escape_debug(),

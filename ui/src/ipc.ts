@@ -177,7 +177,7 @@ export const ipc = {
     }),
   processKill: (id: string) => invoke<boolean>("cmd_process_kill", { id }),
   ptyWrite: (id: string, data: string) => {
-    if (localStorage.getItem("customide.debug.terminalInput") === "1") {
+    if (localStorage.getItem("h1code.debug.terminalInput") === "1") {
       console.debug("[terminal-input] invoke cmd_pty_write", {
         id,
         length: data.length,

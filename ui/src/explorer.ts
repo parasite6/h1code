@@ -94,7 +94,7 @@ function joinPath(parent: string, name: string): string {
 }
 
 function debugExplorerTree(message: string, details?: Record<string, unknown>) {
-  if (localStorage.getItem("customide.debug.explorerTree") !== "1") return;
+  if (localStorage.getItem("h1code.debug.explorerTree") !== "1") return;
   console.debug(`[explorer-tree] ${message}`, details ?? {});
 }
 

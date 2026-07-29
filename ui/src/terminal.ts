@@ -11,7 +11,7 @@ import "@xterm/xterm/css/xterm.css";
 import { ipc, type CoreEvent } from "./ipc";
 
 const CUSTOM_KEY_HANDLER_ENABLED =
-  window.localStorage.getItem("customide.terminal.customKeyHandler") === "1";
+  window.localStorage.getItem("h1code.terminal.customKeyHandler") === "1";
 
 /** Native font size at zoom = 1. Matches the constructor option below. */
 const BASE_FONT_SIZE = 13;
@@ -132,7 +132,7 @@ export function mountTerminal(host: HTMLElement): TerminalBinding {
     });
   } else {
     debugInput("customKeyEvent bypassed", {
-      enableWith: "localStorage customide.terminal.customKeyHandler = 1",
+      enableWith: "localStorage h1code.terminal.customKeyHandler = 1",
     });
   }
 
@@ -289,7 +289,7 @@ export function mountTerminal(host: HTMLElement): TerminalBinding {
 }
 
 function debugInput(message: string, details: Record<string, unknown>) {
-  if (localStorage.getItem("customide.debug.terminalInput") !== "1") return;
+  if (localStorage.getItem("h1code.debug.terminalInput") !== "1") return;
   console.debug(`[terminal-input] ${message}`, details);
 }
 

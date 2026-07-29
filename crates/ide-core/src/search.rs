@@ -72,7 +72,7 @@ pub fn search(root: &Path, query: &SearchQuery) -> IdeResult<Vec<SearchHit>> {
         .git_exclude(true)
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
-            name != ".customide" && name != ".git"
+            name != ".h1code" && name != ".git"
         })
         .build_parallel();
 
@@ -131,7 +131,7 @@ pub fn search_paths(root: &Path, query: &SearchQuery) -> IdeResult<Vec<PathHit>>
         .git_exclude(true)
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
-            name != ".customide" && name != ".git"
+            name != ".h1code" && name != ".git"
         })
         .build();
 

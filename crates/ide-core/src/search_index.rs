@@ -29,7 +29,7 @@ pub const DEFAULT_MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 /// Files larger than this are indexed as path/name only (no content).
 pub const DEFAULT_MAX_FILE_BYTES: u64 = 1024 * 1024;
 /// Relative directory under the workspace root that holds the index.
-pub const INDEX_DIR_NAME: &str = ".customide/search-index";
+pub const INDEX_DIR_NAME: &str = ".h1code/search-index";
 
 const WRITER_HEAP_BYTES: usize = 50_000_000;
 const COMMIT_EVERY: usize = 200;
@@ -134,7 +134,7 @@ fn index_dir_for(root: &Path) -> PathBuf {
 fn is_index_noise(path: &Path) -> bool {
     path.components().any(|c| {
         let s = c.as_os_str();
-        s == ".customide" || s == ".git"
+        s == ".h1code" || s == ".git"
     })
 }
 
@@ -642,7 +642,7 @@ impl SearchIndexService {
                     .git_exclude(true)
                     .filter_entry(|e| {
                         let name = e.file_name().to_string_lossy();
-                        name != ".customide" && name != ".git"
+                        name != ".h1code" && name != ".git"
                     })
                     .build();
 
@@ -842,8 +842,8 @@ mod tests {
     }
 
     #[test]
-    fn customide_dir_is_noise() {
-        let p = PathBuf::from("/proj/.customide/search-index/meta.json");
+    fn h1code_dir_is_noise() {
+        let p = PathBuf::from("/proj/.h1code/search-index/meta.json");
         assert!(is_index_noise(&p));
     }
 

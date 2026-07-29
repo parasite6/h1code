@@ -49,15 +49,15 @@ export function rememberRunTarget(workspace: WorkspaceInfo | null, path: string)
 }
 
 export function suppressRunPrompt(path: string) {
-  const suppressed = readJson<string[]>("customide.runPrompt.suppressedFiles", []);
+  const suppressed = readJson<string[]>("h1code.runPrompt.suppressedFiles", []);
   const normalized = normPath(path);
   if (!suppressed.some((item) => normPath(item) === normalized)) {
-    localStorage.setItem("customide.runPrompt.suppressedFiles", JSON.stringify([...suppressed, path]));
+    localStorage.setItem("h1code.runPrompt.suppressedFiles", JSON.stringify([...suppressed, path]));
   }
 }
 
 function isSuppressed(path: string) {
-  const suppressed = readJson<string[]>("customide.runPrompt.suppressedFiles", []);
+  const suppressed = readJson<string[]>("h1code.runPrompt.suppressedFiles", []);
   const normalized = normPath(path);
   return suppressed.some((item) => normPath(item) === normalized);
 }
@@ -189,7 +189,7 @@ function relativeToWorkspace(path: string, root: string) {
 }
 
 function recentKey(root: string) {
-  return `customide.runPrompt.recent:${normPath(root)}`;
+  return `h1code.runPrompt.recent:${normPath(root)}`;
 }
 
 function readJson<T>(key: string, fallback: T): T {

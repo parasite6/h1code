@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AND-IDE",
+  "productName": "<h1code>",
   "version": "0.1.0",
-  "identifier": "com.customide.shell",
+  "identifier": "com.h1code.shell",
   "build": {
     "frontendDist": "../../ui/dist",
     "devUrl": "http://localhost:5173",
@@ -19,7 +19,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AND-IDE",
+        "title": "<h1code>",
         "width": 1280,
         "height": 800,
         "resizable": true,

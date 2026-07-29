@@ -34,7 +34,7 @@ function normPath(p: string): string {
 
 function debugRecentProjects(message: string, details?: Record<string, unknown>) {
   const payload = details ?? {};
-  if (localStorage.getItem("customide.debug.recentProjects") === "1") {
+  if (localStorage.getItem("h1code.debug.recentProjects") === "1") {
     console.debug(`[recent-projects] ${message}`, payload);
   }
 }
@@ -84,7 +84,7 @@ async function bootstrap() {
   const ZOOM_MIN  = 0.8;
   const ZOOM_MAX  = 1.5;
   const ZOOM_STEP = 0.1;
-  const ZOOM_KEY  = "customide.zoom";
+  const ZOOM_KEY  = "h1code.zoom";
 
   let zoomLevel: number = (() => {
     const v = parseFloat(localStorage.getItem(ZOOM_KEY) ?? "1");
@@ -135,7 +135,7 @@ async function bootstrap() {
 
   function getLocalRecentProjects(): RecentProject[] {
     try {
-      const raw = localStorage.getItem("customide.recentProjects");
+      const raw = localStorage.getItem("h1code.recentProjects");
       if (!raw) return [];
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {
@@ -194,7 +194,7 @@ async function bootstrap() {
   }
 
   async function persistRecentProjects() {
-    localStorage.setItem("customide.recentProjects", JSON.stringify(recentProjects));
+    localStorage.setItem("h1code.recentProjects", JSON.stringify(recentProjects));
     try {
       await ipc.recentProjectsSet(recentProjects);
       debugRecentProjects("persisted", {
@@ -1823,11 +1823,11 @@ async function bootstrap() {
     const sidebarResizer = $("sidebar-resizer");
     const bottomResizer = $("bottom-resizer");
 
-    const savedSidebarWidth = localStorage.getItem("customide.sidebarWidth");
+    const savedSidebarWidth = localStorage.getItem("h1code.sidebarWidth");
     let sidebarWidth = savedSidebarWidth ? parseInt(savedSidebarWidth, 10) : 260;
     sidebarWidth = Math.max(150, Math.min(sidebarWidth, 600));
 
-    const savedBottomHeight = localStorage.getItem("customide.bottomHeight");
+    const savedBottomHeight = localStorage.getItem("h1code.bottomHeight");
     let bottomHeight = savedBottomHeight ? parseInt(savedBottomHeight, 10) : 220;
     bottomHeight = Math.max(80, Math.min(bottomHeight, window.innerHeight - 150));
 
@@ -1850,7 +1850,7 @@ async function bootstrap() {
 
       const onMouseUp = () => {
         document.body.classList.remove("resizing");
-        localStorage.setItem("customide.sidebarWidth", sidebarWidth.toString());
+        localStorage.setItem("h1code.sidebarWidth", sidebarWidth.toString());
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
         terminal.fit();
@@ -1877,7 +1877,7 @@ async function bootstrap() {
 
       const onMouseUp = () => {
         document.body.classList.remove("resizing");
-        localStorage.setItem("customide.bottomHeight", bottomHeight.toString());
+        localStorage.setItem("h1code.bottomHeight", bottomHeight.toString());
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
         terminal.fit();

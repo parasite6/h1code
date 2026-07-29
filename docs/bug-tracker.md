@@ -1,4 +1,4 @@
-# CustomIDE - Bug Tracker
+# `<h1code>` - Bug Tracker
 
 > Auto-maintained by Codex. Do not manually reorder entries.
 > Statuses: `Open` | `Investigating` | `Needs confirmation` | `Fixed (unverified)` | `Resolved (verified)` | `Won't fix`

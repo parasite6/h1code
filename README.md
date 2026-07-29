@@ -1,4 +1,4 @@
-# AND-IDE
+# `<h1code>`
 
 A focused, lightweight desktop IDE aimed at HTML development. Built as a Rust core with a Tauri + TypeScript shell.
 
@@ -10,7 +10,7 @@ The product is branded for HTML; the current engine still includes Python run/li
 
 - **Workspace management** — open folders, recent projects, and scratch workspaces with create / rename / delete in the explorer
 - **CodeMirror editor** — tabbed editing with save flows for untitled and on-disk files
-- **Workspace search** — ripgrep-backed search plus a size-capped Tantivy index (gitignore-aware, stored under `.customide/search-index`)
+- **Workspace search** — ripgrep-backed search plus a size-capped Tantivy index (gitignore-aware, stored under `.h1code/search-index`)
 - **Terminal** — interactive PTY shell in the bottom panel
 - **Run / lint** — run the active Python file and lint with Ruff (Problems panel); interpreter status in the status bar
 - **Empty-state start screen** — recent projects and quick actions when no file is open
@@ -78,12 +78,12 @@ See `crates/ide-cli/src/main.rs` for the full command list.
 ## Project layout
 
 ```
-CustomIDE/
+-h1code-/
 ├── Cargo.toml              # workspace
 ├── requirements.txt        # optional Python tooling
 ├── crates/
 │   ├── ide-core/           # engine library
-│   ├── ide-shell/          # Tauri binary (AND-IDE)
+│   ├── ide-shell/          # Tauri binary (<h1code>)
 │   └── ide-cli/            # CLI driver
 ├── ui/                     # Vite + TS frontend
 │   ├── index.html

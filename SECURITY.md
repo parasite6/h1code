@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-AND-IDE is in early development. Only the current minor line receives security updates.
+`<h1code>` is in early development. Only the current minor line receives security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -13,7 +13,7 @@ AND-IDE is in early development. Only the current minor line receives security u
 
 Please report security issues through GitHub’s **private vulnerability reporting** on this repository:
 
-[Report a vulnerability](https://github.com/parasite6/CustomIDE/security/advisories/new)
+[Report a vulnerability](https://github.com/parasite6/-h1code-/security/advisories/new)
 
 Do **not** open a public issue for security-sensitive reports.
 
