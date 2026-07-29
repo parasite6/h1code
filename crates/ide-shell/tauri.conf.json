@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "<h1code>",
+  "productName": "h1code",
   "version": "0.1.0",
   "identifier": "com.h1code.shell",
   "build": {

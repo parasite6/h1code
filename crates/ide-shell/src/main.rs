@@ -36,6 +36,14 @@ struct AppState {
 }
 
 fn main() {
+    // Prefer the XDG Desktop File Chooser portal (Adwaita/GNOME) over legacy
+    // GTK3 file dialogs. Must run before Tauri/GTK dialog backends initialize.
+    #[cfg(target_os = "linux")]
+    // SAFETY: set at process start before any threads are spawned.
+    unsafe {
+        std::env::set_var("GTK_USE_PORTAL", "1");
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
