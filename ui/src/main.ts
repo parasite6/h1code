@@ -8,9 +8,11 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ipc, onCoreEvent, type CoreDiagnostic, type CoreEvent, type RecentProject, type WorkspaceInfo } from "./ipc";
 import { mountEditor, destroyEditor } from "./editor";
 import { mountTabs, isTemporaryPath, type Tab } from "./tabs";
+import { mountMediaViewer } from "./mediaViewer";
+import { isTextTabKind, classifyOpenPath } from "./fileKind";
 import { mountExplorer, type ScratchEntry, type ScratchFile, type ScratchFolder } from "./explorer";
 import { createFileSync } from "./fileSync";
-import { confirmSave, confirmDialog, promptName, type SaveDecision } from "./modal";
+import { confirmSave, promptName, type SaveDecision } from "./modal";
 import { mountTerminal } from "./terminal";
 import { mountProblems, type ProblemEntry } from "./problems";
 import { mountSearch } from "./search";
@@ -66,16 +68,18 @@ async function bootstrap() {
     scheduleDidChange();
   });
   const tabs = mountTabs($("tabs"));
+  const mediaViewer = mountMediaViewer($("media-viewer"));
   const explorer = mountExplorer($("explorer-tree"));
   const terminal = mountTerminal($("terminal"));
   const problems = mountProblems($("problems"));
   const search = mountSearch($("panel-search"));
   const editorHost = $("editor");
+  const mediaViewerHost = $("media-viewer");
   const editorEmptyState = $("editor-empty-state");
   const fileSyncBanner = $("file-sync-banner");
   const fileSyncMessage = fileSyncBanner.querySelector(".file-sync-message") as HTMLElement;
   const fileSyncActions = fileSyncBanner.querySelector(".file-sync-actions") as HTMLElement;
-  const runButton = $("btn-run");
+  const runButton = $("btn-run") as HTMLButtonElement;
   const runTargetPopover = $("run-target-popover");
   const runTargetSuggestion = $("run-target-suggestion");
   const runTargetCurrent = $("run-target-current");
@@ -140,12 +144,13 @@ async function bootstrap() {
         ipc.docDidOpen(to, tab.content).catch(() => {});
       }
       if (preview.isOpen() && preview.currentFile() && normPath(from) === normPath(preview.currentFile()!)) {
-        if (/\.html?$/i.test(to)) {
+        if (isHtmlPath(to)) {
           preview.open(to).catch(() => {});
         } else {
           preview.close().catch(() => {});
         }
       }
+      syncRunButton();
     },
     onSaveAs: () => {
       void saveActiveAs();
@@ -875,8 +880,16 @@ async function bootstrap() {
       const loaded = await Promise.all(
         orderedFiles.map(async (path) => {
           try {
-            return { path, content: await ipc.fsRead(path) };
+            const kind = await classifyOpenPath(path);
+            if (kind !== "text") {
+              return { path, content: "", kind };
+            }
+            return { path, content: await ipc.fsRead(path), kind: "text" as const };
           } catch (e) {
+            // Safety net for session restore: binary leftovers become viewer tabs.
+            if (String(e).toLowerCase().includes("not a text file")) {
+              return { path, content: "", kind: "binary" as const };
+            }
             terminal.log(`Could not restore tab ${path}: ${String(e)}`, { newPrompt: true });
             return null;
           }
@@ -885,8 +898,9 @@ async function bootstrap() {
 
       for (const item of loaded) {
         if (!item) continue;
-        tabs.addBackground(item.path, basename(item.path), item.content);
+        tabs.addBackground(item.path, basename(item.path), item.content, item.kind);
         if (
+          item.kind === "text" &&
           !isTemporaryPath(item.path) &&
           /\.pyi?$/i.test(item.path) &&
           item.content.length <= PYRIGHT_MAX_DOC_CHARS
@@ -1008,9 +1022,17 @@ async function bootstrap() {
   }
 
   function showEditor(active: boolean) {
-    editorHost.classList.toggle("hidden", !active);
-    editorEmptyState.classList.toggle("hidden", active);
-    if (!active) {
+    showCenterPane(active ? "editor" : "empty");
+  }
+
+  function showCenterPane(mode: "empty" | "editor" | "viewer") {
+    editorEmptyState.classList.toggle("hidden", mode !== "empty");
+    editorHost.classList.toggle("hidden", mode !== "editor");
+    mediaViewerHost.classList.toggle("hidden", mode !== "viewer");
+    if (mode !== "viewer") {
+      mediaViewer.hide();
+    }
+    if (mode === "empty") {
       renderEmptyState();
     }
   }
@@ -1020,6 +1042,27 @@ async function bootstrap() {
     runTargetSuggestion.replaceChildren();
     runTargetCurrent.onclick = null;
     runTargetSuppress.onclick = null;
+  }
+
+  const RUN_BUTTON_TITLE = "Run Active Python File";
+  const RUN_BUTTON_HTML_TITLE = "Use Preview for HTML files";
+
+  function isHtmlPath(path: string): boolean {
+    return /\.html?$/i.test(path);
+  }
+
+  /** Run executes Python; HTML uses Preview; media/binary tabs stay disabled. */
+  function syncRunButton() {
+    const active = tabs.active();
+    const htmlActive = !!active && isHtmlPath(active.path);
+    const nonText = !!active && !isTextTabKind(active.kind);
+    runButton.disabled = htmlActive || nonText;
+    runButton.title = htmlActive
+      ? RUN_BUTTON_HTML_TITLE
+      : nonText
+        ? "Can't run this file type"
+        : RUN_BUTTON_TITLE;
+    if (htmlActive || nonText) hideRunTargetPopover();
   }
 
   function showRunTargetPopover(activePath: string, suggestion: RunTargetSuggestion) {
@@ -1109,39 +1152,54 @@ async function bootstrap() {
 
   tabs.onActiveChange((tab) => {
     if (tab) {
-      showEditor(true);
-      editor.setDoc(tab.content, tab.path);
-      editor.view.requestMeasure();
-      // Re-apply any known diagnostics for this file (avoid stale set from previous tab).
-      pushDiagsToEditor(tab.path);
-      editor.focus();
+      if (!isTextTabKind(tab.kind)) {
+        showCenterPane("viewer");
+        mediaViewer.show(tab);
+        editor.setDoc("", "");
+        editor.setDiagnostics([]);
+        fileSync.onActiveTab(tab);
+      } else {
+        showCenterPane("editor");
+        editor.setDoc(tab.content, tab.path);
+        editor.view.requestMeasure();
+        // Re-apply any known diagnostics for this file (avoid stale set from previous tab).
+        pushDiagsToEditor(tab.path);
+        editor.focus();
+        fileSync.onActiveTab(tab);
+        if (preview.isOpen() && isHtmlPath(tab.path) && !isTemporaryPath(tab.path)) {
+          preview.open(tab.path).catch((err) =>
+            terminal.log(`preview failed: ${String(err)}`, { newPrompt: true })
+          );
+        }
+      }
       if (currentWorkspace) {
         persistWorkspaceTabState().catch(() => {});
       }
-      fileSync.onActiveTab(tab);
-      if (preview.isOpen() && /\.html?$/i.test(tab.path) && !isTemporaryPath(tab.path)) {
-        preview.open(tab.path).catch((err) =>
-          terminal.log(`preview failed: ${String(err)}`, { newPrompt: true })
-        );
-      }
     } else {
-      showEditor(false);
+      showCenterPane("empty");
       editor.setDoc("", "");
       editor.setDiagnostics([]);
       fileSync.onActiveTab(null);
     }
+    syncRunButton();
   });
 
-  // tabs.open -> after fsRead, also notify Pyright.
+  // tabs.open -> after fsRead, also notify Pyright (text tabs only).
   const baseOpen = tabs.open.bind(tabs);
   tabs.open = async (path: string) => {
     const isNew = !tabs.all().some((t) => t.path === path);
     await baseOpen(path);
-    if (isNew && !isTemporaryPath(path) && /\.pyi?$/i.test(path)) {
-      const cur = tabs.active();
-      if (cur && cur.path === path && cur.content.length <= PYRIGHT_MAX_DOC_CHARS) {
-        ipc.docDidOpen(path, cur.content).catch(() => {});
-      }
+    const cur = tabs.active();
+    if (
+      isNew &&
+      cur &&
+      cur.path === path &&
+      cur.kind === "text" &&
+      !isTemporaryPath(path) &&
+      /\.pyi?$/i.test(path) &&
+      cur.content.length <= PYRIGHT_MAX_DOC_CHARS
+    ) {
+      ipc.docDidOpen(path, cur.content).catch(() => {});
     }
     if (!isTemporaryPath(path)) {
       fileSync.clearDrift(path);
@@ -1294,6 +1352,10 @@ async function bootstrap() {
       return saveScratchWorkspace();
     }
     if (!active) return false;
+    if (!isTextTabKind(active.kind)) {
+      // Media/binary tabs have nothing to write back through the text editor.
+      return true;
+    }
     if (scratchWorkspace && findScratchFile(active.path)) {
       return saveScratchWorkspace();
     }
@@ -1353,6 +1415,9 @@ async function bootstrap() {
       return saveScratchWorkspace();
     }
     if (!active) return false;
+    if (!isTextTabKind(active.kind)) {
+      return true;
+    }
     if (scratchWorkspace && findScratchFile(active.path)) {
       return saveScratchWorkspace();
     }
@@ -1725,30 +1790,8 @@ async function bootstrap() {
       openScratchFile(path);
       return;
     }
-    // Surface open failures instead of silently doing nothing (which reads as
-    // "lag" or a broken click). For non-text files, offer to open anyway in the
-    // built-in text editor, like most editors do.
-    tabs.open(path).catch(async (e) => {
-      if (!String(e).includes("not a text file")) {
-        terminal.log(`open failed: ${String(e)}`, { newPrompt: true });
-        return;
-      }
-      const name = basename(path);
-      const openAnyway = await confirmDialog({
-        title: "Can't open this file",
-        message: `${name} is not a readable text format. Do you want to open it in the built-in text editor anyway?`,
-        confirmLabel: "Open Anyway",
-        cancelLabel: "Cancel",
-      });
-      if (!openAnyway) return;
-      try {
-        const content = await ipc.fsReadLossy(path);
-        tabs.openWithContent(path, name, content);
-        fileSync.clearDrift(path);
-        await fileSync.noteBaseline(path);
-      } catch (e2) {
-        terminal.log(`open failed: ${String(e2)}`, { newPrompt: true });
-      }
+    tabs.open(path).catch((e) => {
+      terminal.log(`open failed: ${String(e)}`, { newPrompt: true });
     });
   });
   explorer.onFileCreated((path) => {
@@ -1815,10 +1858,10 @@ async function bootstrap() {
     showBottom("terminal", false); // hide problems so the editor jump is visible
   });
 
-  search.onOpenFile(async (path, line, col) => {
+  search.onOpenFile(async (path, line, col, endCol) => {
     await tabs.open(path);
     if (line != null) {
-      editor.jumpTo(line, col ?? 1);
+      editor.jumpTo(line, col ?? 1, endCol);
     }
   });
 
@@ -1882,11 +1925,11 @@ async function bootstrap() {
     }
     const active = tabs.active();
     let target =
-      active && /\.html?$/i.test(active.path) && !isTemporaryPath(active.path)
+      active && isHtmlPath(active.path) && !isTemporaryPath(active.path)
         ? active.path
         : null;
     if (!target) {
-      const htmlTab = tabs.all().find((t) => /\.html?$/i.test(t.path) && !isTemporaryPath(t.path));
+      const htmlTab = tabs.all().find((t) => isHtmlPath(t.path) && !isTemporaryPath(t.path));
       target = htmlTab?.path ?? null;
     }
     if (!target) {
@@ -1985,6 +2028,15 @@ async function bootstrap() {
       terminal.log("No file open.", { newPrompt: true });
       return;
     }
+    // HTML is previewed, not executed — button is disabled; guard for safety.
+    if (isHtmlPath(active.path)) {
+      terminal.log("Use Preview for HTML files.", { newPrompt: true });
+      return;
+    }
+    if (!isTextTabKind(active.kind)) {
+      terminal.log("Can't run this file type.", { newPrompt: true });
+      return;
+    }
 
     const decision = await chooseRunTarget(active, editor.getDoc(), currentWorkspace);
     if (decision.shouldPrompt && decision.suggestion) {
@@ -1994,6 +2046,8 @@ async function bootstrap() {
 
     await runFile(active.path);
   };
+
+  syncRunButton();
 
   $("btn-ruff").onclick = async () => {
     try {

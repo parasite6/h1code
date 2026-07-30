@@ -33,6 +33,19 @@ pub struct FileStat {
     pub is_dir: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SniffMedia {
+    Audio,
+    Image,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSniff {
+    pub looks_binary: bool,
+    pub media: Option<SniffMedia>,
+}
+
 #[derive(Clone)]
 pub struct FsService {
     bus: EventBus,
@@ -76,6 +89,40 @@ impl FsService {
     pub fn read_lossy(&self, path: &Path) -> IdeResult<String> {
         let bytes = std::fs::read(path)?;
         Ok(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// Max size for in-memory media previews (audio/images via blob URL).
+    pub const MEDIA_BYTES_MAX: u64 = 64 * 1024 * 1024;
+
+    /// Read raw file bytes for media preview. Rejects oversized files so a
+    /// huge asset cannot blow up the webview process.
+    pub fn read_bytes(&self, path: &Path, max_bytes: u64) -> IdeResult<Vec<u8>> {
+        let meta = std::fs::metadata(path)?;
+        if meta.is_dir() {
+            return Err(IdeError::other("path is a directory"));
+        }
+        if meta.len() > max_bytes {
+            return Err(IdeError::other(format!(
+                "file too large for preview ({} bytes; max {} bytes)",
+                meta.len(),
+                max_bytes
+            )));
+        }
+        Ok(std::fs::read(path)?)
+    }
+
+    /// Cheap head sniff for unknown extensions: null-byte heuristic + common
+    /// image/audio magic. Does not load the whole file.
+    pub fn sniff(&self, path: &Path) -> IdeResult<FileSniff> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(path)?;
+        let mut buf = [0u8; 8192];
+        let n = file.read(&mut buf)?;
+        let head = &buf[..n];
+        Ok(FileSniff {
+            looks_binary: head.iter().any(|&b| b == 0),
+            media: sniff_media(head),
+        })
     }
 
     pub fn write(&self, path: &Path, contents: &str) -> IdeResult<()> {
@@ -302,6 +349,42 @@ fn publish_event(
     }
 }
 
+fn sniff_media(head: &[u8]) -> Option<SniffMedia> {
+    if head.starts_with(&[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n']) {
+        return Some(SniffMedia::Image);
+    }
+    if head.len() >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF {
+        return Some(SniffMedia::Image);
+    }
+    if head.starts_with(b"GIF87a") || head.starts_with(b"GIF89a") {
+        return Some(SniffMedia::Image);
+    }
+    if head.len() >= 12 && &head[0..4] == b"RIFF" && &head[8..12] == b"WEBP" {
+        return Some(SniffMedia::Image);
+    }
+    if head.starts_with(b"BM") {
+        return Some(SniffMedia::Image);
+    }
+    // ICO: reserved u16=0, type u16=1
+    if head.len() >= 4 && head[0] == 0 && head[1] == 0 && head[2] == 1 && head[3] == 0 {
+        return Some(SniffMedia::Image);
+    }
+    if head.starts_with(b"ID3") {
+        return Some(SniffMedia::Audio);
+    }
+    // MPEG frame sync
+    if head.len() >= 2 && head[0] == 0xFF && (head[1] & 0xE0) == 0xE0 {
+        return Some(SniffMedia::Audio);
+    }
+    if head.starts_with(b"fLaC") || head.starts_with(b"OggS") {
+        return Some(SniffMedia::Audio);
+    }
+    if head.len() >= 12 && &head[0..4] == b"RIFF" && &head[8..12] == b"WAVE" {
+        return Some(SniffMedia::Audio);
+    }
+    None
+}
+
 fn atomic_write_tmp_path(path: &Path) -> PathBuf {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = path
@@ -367,5 +450,35 @@ mod tests {
         assert!(!st.exists);
         assert!(st.mtime_ms.is_none());
         assert!(st.size.is_none());
+    }
+
+    #[test]
+    fn sniff_detects_png_and_null_bytes() {
+        let dir = tempdir().unwrap();
+        let png = dir.path().join("x.bin");
+        let mut bytes = vec![0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
+        bytes.extend_from_slice(&[0, 1, 2, 3]);
+        fs::write(&png, &bytes).unwrap();
+        let fs = FsService::new(EventBus::new());
+        let sniff = fs.sniff(&png).unwrap();
+        assert!(sniff.looks_binary);
+        assert_eq!(sniff.media, Some(SniffMedia::Image));
+
+        let text = dir.path().join("ok.txt");
+        fs::write(&text, "hello world").unwrap();
+        let sniff_text = fs.sniff(&text).unwrap();
+        assert!(!sniff_text.looks_binary);
+        assert!(sniff_text.media.is_none());
+    }
+
+    #[test]
+    fn read_bytes_returns_content_and_rejects_oversized() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("tiny.bin");
+        fs::write(&path, b"abc123").unwrap();
+        let fs = FsService::new(EventBus::new());
+        assert_eq!(fs.read_bytes(&path, 64).unwrap(), b"abc123");
+        let err = fs.read_bytes(&path, 3).unwrap_err().to_string();
+        assert!(err.contains("too large"), "unexpected err: {err}");
     }
 }

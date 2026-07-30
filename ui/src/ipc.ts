@@ -131,6 +131,11 @@ export interface FileStat {
   is_dir: boolean | null;
 }
 
+export interface FileSniff {
+  looks_binary: boolean;
+  media: "audio" | "image" | null;
+}
+
 export type PreviewEngine = "tauri" | "chrome";
 
 export interface PreviewServerInfo {
@@ -182,6 +187,10 @@ export const ipc = {
   fsList: (path: string) => invoke<DirEntry[]>("cmd_fs_list", { path }),
   fsRead: (path: string) => invoke<string>("cmd_fs_read", { path }),
   fsReadLossy: (path: string) => invoke<string>("cmd_fs_read_lossy", { path }),
+  /** Raw bytes for media preview (ArrayBuffer / Uint8Array / number[]). Jailed. */
+  fsReadBytes: (path: string) =>
+    invoke<ArrayBuffer | Uint8Array | number[]>("cmd_fs_read_bytes", { path }),
+  fsSniff: (path: string) => invoke<FileSniff>("cmd_fs_sniff", { path }),
   fsWrite: (path: string, contents: string) =>
     invoke<void>("cmd_fs_write", { path, contents }),
   fsCreateFile: (path: string) => invoke<void>("cmd_fs_create_file", { path }),

@@ -12,7 +12,15 @@ export interface SearchBinding {
   focus(): void;
   setWorkspaceRoot(root: string | null): void;
   applyEvent(evt: CoreEvent): void;
-  onOpenFile(handler: (path: string, line?: number, col?: number) => void): void;
+  /** col / endCol are 1-based (endCol exclusive), matching editor.jumpTo. */
+  onOpenFile(
+    handler: (
+      path: string,
+      line?: number,
+      col?: number,
+      endCol?: number
+    ) => void
+  ): void;
 }
 
 function basename(path: string): string {
@@ -78,8 +86,14 @@ export function mountSearch(panel: HTMLElement): SearchBinding {
   let indexStatus: SearchIndexStatus | null = null;
   let debounceTimer: number | null = null;
   let requestSeq = 0;
-  let openHandler: ((path: string, line?: number, col?: number) => void) | null =
-    null;
+  let openHandler:
+    | ((
+        path: string,
+        line?: number,
+        col?: number,
+        endCol?: number
+      ) => void)
+    | null = null;
   let searching = false;
 
   function renderStatus() {
@@ -143,7 +157,7 @@ export function mountSearch(panel: HTMLElement): SearchBinding {
         .map(([path, hits]) => {
           const rows = hits
             .map(
-              (h) => `<button type="button" class="search-result-row search-content-row" data-kind="content" data-path="${escapeHtml(h.path)}" data-line="${h.line_number}" data-col="${h.start + 1}">
+              (h) => `<button type="button" class="search-result-row search-content-row" data-kind="content" data-path="${escapeHtml(h.path)}" data-line="${h.line_number}" data-col="${h.start + 1}" data-end-col="${h.end + 1}">
               <span class="search-result-line">${h.line_number}</span>
               <span class="search-result-snippet">${highlightSnippet(h.line, h.start, h.end)}</span>
             </button>`
@@ -234,7 +248,10 @@ export function mountSearch(panel: HTMLElement): SearchBinding {
     if (kind === "folder") return;
     const line = target.dataset.line ? Number(target.dataset.line) : undefined;
     const col = target.dataset.col ? Number(target.dataset.col) : undefined;
-    openHandler(path, line, col);
+    const endCol = target.dataset.endCol
+      ? Number(target.dataset.endCol)
+      : undefined;
+    openHandler(path, line, col, endCol);
   });
 
   void ipc.searchStatus()

@@ -1,13 +1,15 @@
 // Tabs: open files, switch, close, modified marker. The model is editor-local
 // state (the rule says: TS owns rendering + editor-local state only).
 
+import { classifyOpenPath, type FileKind } from "./fileKind";
 import { ipc } from "./ipc";
 
 export interface Tab {
   path: string;
   name: string;
-  content: string; // current editor snapshot
+  content: string; // current editor snapshot (empty for non-text kinds)
   dirty: boolean;
+  kind: FileKind;
 }
 
 export interface TabsBinding {
@@ -17,16 +19,16 @@ export interface TabsBinding {
   openTemporaryFile(name: string, content?: string): string;
   openVirtualFile(path: string, name: string, content?: string): void;
   /**
-   * Open a real on-disk `path` using already-read `content` (e.g. a lossy read
-   * of a binary the user chose to open anyway). Opens clean (not dirty).
+   * Open a real on-disk `path` using already-read `content`. Opens clean (not dirty).
+   * Prefer `open()` for normal files — this bypasses binary classification.
    */
-  openWithContent(path: string, name: string, content: string): void;
+  openWithContent(path: string, name: string, content: string, kind?: FileKind): void;
   /**
    * Insert a clean tab from already-read `content` WITHOUT activating it or
    * re-rendering. Used to batch-restore many tabs cheaply; caller must call
    * `render()` and `setActive()` once afterwards.
    */
-  addBackground(path: string, name: string, content: string): void;
+  addBackground(path: string, name: string, content: string, kind?: FileKind): void;
   close(path: string): void;
   renamePath(oldPath: string, newPath: string, newName?: string): void;
   get(path: string): Tab | null;
@@ -63,6 +65,10 @@ export function isUntitledPath(path: string): boolean {
 
 export function isTemporaryPath(path: string): boolean {
   return path.startsWith("untitled:") || path.startsWith("scratch:");
+}
+
+function isNotTextFileError(err: unknown): boolean {
+  return String(err).toLowerCase().includes("not a text file");
 }
 
 // Crisp outline SVGs for tabs
@@ -145,12 +151,30 @@ export function mountTabs(host: HTMLElement): TabsBinding {
     }
   }
 
+  function insertTab(path: string, name: string, content: string, kind: FileKind, dirty: boolean) {
+    tabs.set(path, { path, name, content, dirty, kind });
+  }
+
   const api: TabsBinding = {
     async open(path: string) {
       if (!tabs.has(path)) {
-        const content = await ipc.fsRead(path);
         const name = path.split(/[\\/]/).pop() ?? path;
-        tabs.set(path, { path, name, content, dirty: false });
+        const kind = await classifyOpenPath(path);
+        if (kind !== "text") {
+          insertTab(path, name, "", kind, false);
+        } else {
+          try {
+            const content = await ipc.fsRead(path);
+            insertTab(path, name, content, "text", false);
+          } catch (e) {
+            // Safety net: never push binary bytes into the editor buffer.
+            if (isNotTextFileError(e)) {
+              insertTab(path, name, "", "binary", false);
+            } else {
+              throw e;
+            }
+          }
+        }
       }
       api.setActive(path);
     },
@@ -158,7 +182,7 @@ export function mountTabs(host: HTMLElement): TabsBinding {
       untitledCounter += 1;
       const key = `untitled:${untitledCounter}`;
       const name = `Untitled-${untitledCounter}`;
-      tabs.set(key, { path: key, name, content: "", dirty: true });
+      insertTab(key, name, "", "text", true);
       api.setActive(key);
       return key;
     },
@@ -166,25 +190,25 @@ export function mountTabs(host: HTMLElement): TabsBinding {
       untitledCounter += 1;
       const cleanName = name.trim() || `Untitled-${untitledCounter}`;
       const key = `untitled:${untitledCounter}`;
-      tabs.set(key, { path: key, name: cleanName, content, dirty: true });
+      insertTab(key, cleanName, content, "text", true);
       api.setActive(key);
       return key;
     },
     openVirtualFile(path: string, name: string, content = "") {
       if (!tabs.has(path)) {
-        tabs.set(path, { path, name, content, dirty: true });
+        insertTab(path, name, content, "text", true);
       }
       api.setActive(path);
     },
-    openWithContent(path: string, name: string, content: string) {
+    openWithContent(path: string, name: string, content: string, kind: FileKind = "text") {
       if (!tabs.has(path)) {
-        tabs.set(path, { path, name, content, dirty: false });
+        insertTab(path, name, kind === "text" ? content : "", kind, false);
       }
       api.setActive(path);
     },
-    addBackground(path: string, name: string, content: string) {
+    addBackground(path: string, name: string, content: string, kind: FileKind = "text") {
       if (!tabs.has(path)) {
-        tabs.set(path, { path, name, content, dirty: false });
+        insertTab(path, name, kind === "text" ? content : "", kind, false);
       }
     },
     close(path: string) {
@@ -212,7 +236,7 @@ export function mountTabs(host: HTMLElement): TabsBinding {
     },
     setContent(path: string, content: string, opts?: { dirty?: boolean }) {
       const tab = tabs.get(path);
-      if (!tab) return;
+      if (!tab || tab.kind !== "text") return;
       tab.content = content;
       if (opts && opts.dirty !== undefined) {
         tab.dirty = opts.dirty;
@@ -231,12 +255,12 @@ export function mountTabs(host: HTMLElement): TabsBinding {
     },
     updateActiveContent(content: string) {
       const tab = api.active();
-      if (!tab) return;
+      if (!tab || tab.kind !== "text") return;
       tab.content = content;
     },
     markDirty(dirty: boolean) {
       const tab = api.active();
-      if (!tab) return;
+      if (!tab || tab.kind !== "text") return;
       if (tab.dirty !== dirty) {
         tab.dirty = dirty;
         render();
@@ -244,7 +268,7 @@ export function mountTabs(host: HTMLElement): TabsBinding {
     },
     async saveActive(currentEditorText: string) {
       const tab = api.active();
-      if (!tab) return;
+      if (!tab || tab.kind !== "text") return;
       await ipc.fsWrite(tab.path, currentEditorText);
       tab.content = currentEditorText;
       tab.dirty = false;
@@ -264,6 +288,7 @@ export function mountTabs(host: HTMLElement): TabsBinding {
       tab.name = name;
       tab.content = contents;
       tab.dirty = false;
+      tab.kind = "text";
       tabs.delete(oldPath);
       // Re-insert under the new key, preserving insertion order at the end is
       // fine for v1 — the visible position only matters for adjacent close UX.

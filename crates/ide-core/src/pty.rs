@@ -156,7 +156,6 @@ impl PtyManager {
             target: "h1code::pty",
             id = %id,
             bytes = data.len(),
-            data = %String::from_utf8_lossy(data).escape_debug(),
             "PtyManager::write requested"
         );
         let session = {

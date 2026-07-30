@@ -12,6 +12,8 @@ import {
   Annotation,
   Text,
   countColumn,
+  StateEffect,
+  StateField,
 } from "@codemirror/state";
 import {
   EditorView,
@@ -20,6 +22,8 @@ import {
   highlightActiveLine,
   drawSelection,
   dropCursor,
+  Decoration,
+  type DecorationSet,
   type KeyBinding,
   type Command,
 } from "@codemirror/view";
@@ -65,8 +69,12 @@ export interface EditorBinding {
   destroy(): void;
   /** Push the diagnostic set for the currently-displayed doc. */
   setDiagnostics(items: DiagnosticItem[]): void;
-  /** Move caret to a 1-based (line, col); col is 1-based to match Problems UI. */
-  jumpTo(line: number, col: number): void;
+  /**
+   * Move caret to a 1-based (line, col); col is 1-based to match Problems UI.
+   * When endCol is provided (1-based, exclusive), select and decorate that span
+   * with a find-match highlight (search result navigation).
+   */
+  jumpTo(line: number, col: number, endCol?: number): void;
 }
 
 // Tag programmatic doc swaps so the change listener doesn't treat them as
@@ -185,6 +193,35 @@ const indentKeymap: KeyBinding[] = [
   { key: "Enter", run: insertNewlinePreserveLineIndent, shift: insertNewlinePreserveLineIndent },
 ];
 
+/** Temporary find-match span from search-result navigation. */
+const setSearchMatch = StateEffect.define<{ from: number; to: number } | null>();
+
+const searchMatchMark = Decoration.mark({ class: "cm-searchMatch" });
+
+const searchMatchField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (e.is(setSearchMatch)) {
+        if (e.value == null || e.value.from >= e.value.to) {
+          deco = Decoration.none;
+        } else {
+          deco = Decoration.set([searchMatchMark.range(e.value.from, e.value.to)]);
+        }
+      }
+    }
+    // Drop the highlight once the user edits the document.
+    if (tr.docChanged && !tr.effects.some((e) => e.is(setSearchMatch))) {
+      deco = Decoration.none;
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBinding {
   // Hot reload re-runs bootstrap without a full document reload; destroy any
   // prior view so keymaps/updateListeners are never double-registered.
@@ -214,6 +251,7 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
         // diagnostics imperatively via setDiagnostics().
         linter(() => [], { delay: 100000 }),
         lintGutter(),
+        searchMatchField,
         EditorView.theme(
           {
             "&": { backgroundColor: "#1e1e1e", color: "#d4d4d4", height: "100%" },
@@ -228,10 +266,17 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
               color: "#5a5a5a",
               border: "none",
             },
-            ".cm-activeLine": { backgroundColor: "#2a2a2a" },
-            ".cm-activeLineGutter": { backgroundColor: "#2a2a2a" },
+            // Active line: muted accent tint (matches --accent-bg). Kept subtle so
+            // it never reads like selection (#264f78) or search-match orange.
+            ".cm-activeLine": { backgroundColor: "rgba(0, 122, 204, 0.10)" },
+            ".cm-activeLineGutter": { backgroundColor: "rgba(0, 122, 204, 0.10)" },
             ".cm-selectionBackground, .cm-content ::selection": {
               backgroundColor: "#264f78 !important",
+            },
+            // Find-match span: orange tint, distinct from active-line and selection.
+            ".cm-searchMatch": {
+              backgroundColor: "rgba(234, 156, 52, 0.45)",
+              outline: "1px solid rgba(234, 156, 52, 0.7)",
             },
             ".cm-tooltip.cm-tooltip-lint": {
               backgroundColor: "#252526",
@@ -276,7 +321,10 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
       const plain = text.length > LARGE_FILE_PLAIN_THRESHOLD;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
-        effects: language.reconfigure(plain ? [] : python()),
+        effects: [
+          language.reconfigure(plain ? [] : python()),
+          setSearchMatch.of(null),
+        ],
         annotations: ProgrammaticDocSet.of(true),
       });
       // Reset diagnostics when the document is replaced; the caller is expected
@@ -304,13 +352,22 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
       });
       view.dispatch(cmSetDiagnostics(view.state, mapped));
     },
-    jumpTo(line, col) {
+    jumpTo(line, col, endCol) {
       const doc = view.state.doc;
       const ln = Math.max(1, Math.min(line, doc.lines));
       const lineObj = doc.line(ln);
-      const pos = Math.min(lineObj.from + Math.max(0, col - 1), lineObj.to);
+      const from = Math.min(lineObj.from + Math.max(0, col - 1), lineObj.to);
+      const to =
+        endCol != null
+          ? Math.min(lineObj.from + Math.max(0, endCol - 1), lineObj.to)
+          : from;
+      const hasMatch = to > from;
       view.dispatch({
-        selection: EditorSelection.single(pos),
+        // Anchor at end, head at start so the caret sits on the match start.
+        selection: hasMatch
+          ? EditorSelection.single(to, from)
+          : EditorSelection.single(from),
+        effects: setSearchMatch.of(hasMatch ? { from, to } : null),
         scrollIntoView: true,
       });
       view.focus();

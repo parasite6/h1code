@@ -15,7 +15,7 @@ use tauri::{Emitter, State};
 use tracing_subscriber::EnvFilter;
 
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
-use ide_core::fs_service::{DirEntry, FileStat, FsService};
+use ide_core::fs_service::{DirEntry, FileSniff, FileStat, FsService};
 use ide_core::path_jail;
 use ide_core::preview_settings::PreviewEngine;
 use ide_core::process::ProcessRunner;
@@ -106,6 +106,8 @@ fn main() {
             cmd_fs_list,
             cmd_fs_read,
             cmd_fs_read_lossy,
+            cmd_fs_read_bytes,
+            cmd_fs_sniff,
             cmd_fs_write,
             cmd_fs_create_file,
             cmd_fs_create_dir,
@@ -483,6 +485,28 @@ fn cmd_fs_read_lossy(state: State<'_, AppState>, path: String) -> Result<String,
 }
 
 #[tauri::command(async)]
+fn cmd_fs_sniff(state: State<'_, AppState>, path: String) -> Result<FileSniff, String> {
+    let path = jail_fs_path(&state, &path)?;
+    state.fs.sniff(&path).map_err(to_err)
+}
+
+/// Raw bytes for media preview (audio/image blob URLs). Goes through the
+/// workspace jail — do not replace with convertFileSrc-only loading on Linux:
+/// WebKitGTK/GStreamer cannot play `<audio>`/`<video>` from the `asset://` protocol.
+#[tauri::command(async)]
+fn cmd_fs_read_bytes(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let path = jail_fs_path(&state, &path)?;
+    let bytes = state
+        .fs
+        .read_bytes(&path, ide_core::fs_service::FsService::MEDIA_BYTES_MAX)
+        .map_err(to_err)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command(async)]
 fn cmd_fs_write(state: State<'_, AppState>, path: String, contents: String) -> Result<(), String> {
     let path = jail_fs_path(&state, &path)?;
     state.fs.write(&path, &contents).map_err(to_err)
@@ -654,7 +678,6 @@ fn cmd_pty_write(state: State<'_, AppState>, id: String, data: String) -> Result
         target: "h1code::pty",
         id = %id,
         bytes = data.len(),
-        data = %data.escape_debug(),
         "cmd_pty_write received"
     );
     state.pty.write(&id, data.as_bytes()).map_err(to_err)

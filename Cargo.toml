@@ -34,7 +34,7 @@ crossbeam-channel = "0.5"
 walkdir = "2"
 tantivy = "0.22"
 regex = "1"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 

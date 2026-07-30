@@ -52,8 +52,35 @@ pub struct SearchResponse {
     pub content: Vec<SearchHit>,
 }
 
+/// Hard ceiling for `SearchQuery.max_results` over IPC.
+const MAX_RESULTS_CEILING: usize = 10_000;
+
+/// Resolve an optional max_results, clamping any provided value to [`MAX_RESULTS_CEILING`].
+fn clamp_max_results(opt: Option<usize>, default: usize) -> usize {
+    opt.unwrap_or(default).min(MAX_RESULTS_CEILING)
+}
+
+/// Max user pattern length (chars). Bounds compile cost and rejects oversized inputs.
+const MAX_PATTERN_CHARS: usize = 512;
+/// Compiled regex NFA size cap (grep-regex default is 100 MiB).
+const REGEX_SIZE_LIMIT: usize = 1 << 20; // 1 MiB
+/// Per-thread DFA cache cap (grep-regex default is 1000 MiB).
+const REGEX_DFA_SIZE_LIMIT: usize = 10 * (1 << 20); // 10 MiB
+/// AST nesting depth cap (grep-regex default is 250).
+const REGEX_NEST_LIMIT: u32 = 50;
+
+fn validate_search_pattern(pattern: &str) -> IdeResult<()> {
+    if pattern.chars().count() > MAX_PATTERN_CHARS {
+        return Err(IdeError::other(format!(
+            "search pattern exceeds maximum length of {MAX_PATTERN_CHARS} characters"
+        )));
+    }
+    Ok(())
+}
+
 /// Full-workspace content search (ripgrep-style). Always authoritative for coverage.
 pub fn search(root: &Path, query: &SearchQuery) -> IdeResult<Vec<SearchHit>> {
+    validate_search_pattern(&query.pattern)?;
     let pattern = if query.literal {
         regex_escape(&query.pattern)
     } else {
@@ -61,9 +88,12 @@ pub fn search(root: &Path, query: &SearchQuery) -> IdeResult<Vec<SearchHit>> {
     };
     let matcher = RegexMatcherBuilder::new()
         .case_insensitive(query.case_insensitive)
+        .size_limit(REGEX_SIZE_LIMIT)
+        .dfa_size_limit(REGEX_DFA_SIZE_LIMIT)
+        .nest_limit(REGEX_NEST_LIMIT)
         .build(&pattern)
         .map_err(|e| IdeError::other(format!("regex: {e}")))?;
-    let cap: usize = query.max_results.unwrap_or(2000);
+    let cap: usize = clamp_max_results(query.max_results, 2000);
 
     let hits = Arc::new(Mutex::new(Vec::with_capacity(256)));
     let walker = WalkBuilder::new(root)
@@ -115,7 +145,7 @@ pub fn search(root: &Path, query: &SearchQuery) -> IdeResult<Vec<SearchHit>> {
 
 /// Filename / folder-name walk used when the index is cold or unavailable.
 pub fn search_paths(root: &Path, query: &SearchQuery) -> IdeResult<Vec<PathHit>> {
-    let cap = query.max_results.unwrap_or(200);
+    let cap = clamp_max_results(query.max_results, 200);
     if query.pattern.is_empty() || cap == 0 {
         return Ok(Vec::new());
     }
@@ -188,7 +218,7 @@ pub fn search_workspace(
         });
     }
 
-    let cap = query.max_results.unwrap_or(500);
+    let cap = clamp_max_results(query.max_results, 500);
     let path_cap = cap.min(200);
     let content_cap = cap;
 
@@ -363,6 +393,91 @@ mod tests {
     use crate::search_index::SearchIndex;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn clamp_max_results_applies_ceiling_and_defaults() {
+        assert_eq!(clamp_max_results(None, 500), 500);
+        assert_eq!(clamp_max_results(Some(50), 500), 50);
+        assert_eq!(clamp_max_results(Some(0), 500), 0);
+        assert_eq!(
+            clamp_max_results(Some(MAX_RESULTS_CEILING), 500),
+            MAX_RESULTS_CEILING
+        );
+        assert_eq!(
+            clamp_max_results(Some(MAX_RESULTS_CEILING + 1), 500),
+            MAX_RESULTS_CEILING
+        );
+        assert_eq!(
+            clamp_max_results(Some(usize::MAX), 2000),
+            MAX_RESULTS_CEILING
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_search_pattern() {
+        let dir = tempdir().unwrap();
+        let pattern: String = "a".repeat(MAX_PATTERN_CHARS + 1);
+        let err = search(
+            dir.path(),
+            &SearchQuery {
+                pattern,
+                literal: false,
+                case_insensitive: false,
+                include_hidden: false,
+                max_results: Some(10),
+            },
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("maximum length"),
+            "expected length error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn accepts_pattern_at_max_length() {
+        let dir = tempdir().unwrap();
+        let needle: String = "z".repeat(MAX_PATTERN_CHARS);
+        fs::write(dir.path().join("hit.txt"), format!("{needle}\n")).unwrap();
+        let hits = search(
+            dir.path(),
+            &SearchQuery {
+                pattern: needle.clone(),
+                literal: true,
+                case_insensitive: false,
+                include_hidden: false,
+                max_results: Some(10),
+            },
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].line.contains(&needle));
+    }
+
+    #[test]
+    fn rejects_excessively_nested_regex() {
+        let dir = tempdir().unwrap();
+        // Nest deeper than REGEX_NEST_LIMIT with a short pattern.
+        let pattern = format!("{}a{}", "(".repeat(REGEX_NEST_LIMIT as usize + 1), ")".repeat(REGEX_NEST_LIMIT as usize + 1));
+        assert!(pattern.chars().count() <= MAX_PATTERN_CHARS);
+        let err = search(
+            dir.path(),
+            &SearchQuery {
+                pattern,
+                literal: false,
+                case_insensitive: false,
+                include_hidden: false,
+                max_results: Some(10),
+            },
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("regex:"),
+            "expected regex compile error, got: {msg}"
+        );
+    }
 
     #[test]
     fn merge_dedupes_by_path_and_line() {

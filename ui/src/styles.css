@@ -126,6 +126,16 @@ body.resizing #bottom-content {
 #topbar button:active {
   background: rgba(255, 255, 255, 0.08);
 }
+#topbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  color: var(--text-dark);
+}
+#topbar button:disabled:hover,
+#topbar button:disabled:active {
+  background: transparent;
+  color: var(--text-dark);
+}
 .menubar {
   display: flex;
   align-items: center;
@@ -1463,6 +1473,72 @@ body[data-welcome-zoom-tier="very-small"] .empty-action-btn {
    WebView zoom otherwise leaves a frozen ghost caret beside the live one. */
 #editor .cm-content { caret-color: transparent; }
 #editor .cm-scroller { font-family: var(--font-mono); font-size: 12px; }
+
+#media-viewer {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-editor);
+  padding: 24px;
+}
+#media-viewer.hidden { display: none; }
+
+.media-viewer-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: min(920px, 100%);
+  text-align: center;
+}
+
+.media-viewer-image img {
+  max-width: 100%;
+  max-height: min(70vh, 720px);
+  object-fit: contain;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#2a2a2a 0% 25%, #222 0% 50%) 50% / 16px 16px;
+}
+
+.media-viewer-audio audio {
+  width: min(480px, 100%);
+}
+
+.media-viewer-filename {
+  color: var(--text-muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.media-viewer-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.media-viewer-detail {
+  max-width: 420px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.media-viewer-error {
+  max-width: min(640px, 100%);
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffb4b4;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  line-height: 1.45;
+  word-break: break-all;
+  text-align: left;
+}
 
 /* Drag Resizer System Styling */
 .resizer {

@@ -185,6 +185,18 @@ export function createFileSync(deps: FileSyncDeps): FileSyncBinding {
 
   async function reloadFromDisk(path: string): Promise<void> {
     try {
+      const tab = deps.tabs.get(path);
+      if (tab && tab.kind !== "text") {
+        await noteBaseline(path);
+        clearDrift(path);
+        hideBanner();
+        // Re-fire active change so image/audio viewers refresh their src.
+        if (deps.tabs.active() && keyOf(deps.tabs.active()!.path) === keyOf(path)) {
+          deps.tabs.setActive(path);
+        }
+        deps.onTabsChanged?.();
+        return;
+      }
       const content = await ipc.fsRead(path);
       deps.tabs.setContent(path, content, { dirty: false });
       const active = deps.tabs.active();
