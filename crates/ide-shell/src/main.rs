@@ -13,7 +13,7 @@ use tauri::{Emitter, State};
 use tracing_subscriber::EnvFilter;
 
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
-use ide_core::fs_service::{DirEntry, FsService};
+use ide_core::fs_service::{DirEntry, FileStat, FsService};
 use ide_core::process::ProcessRunner;
 use ide_core::pty::{PtyManager, PtySpec};
 use ide_core::pyright::PyrightManager;
@@ -86,6 +86,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             cmd_workspace_open,
+            cmd_workspace_close,
             cmd_workspace_info,
             cmd_recent_projects_get,
             cmd_recent_projects_set,
@@ -101,6 +102,7 @@ fn main() {
             cmd_fs_create_dir,
             cmd_fs_rename,
             cmd_fs_remove,
+            cmd_fs_stat,
             cmd_search,
             cmd_search_status,
             cmd_pty_open,
@@ -128,8 +130,11 @@ fn to_err<E: std::fmt::Display>(e: E) -> String {
 #[tauri::command(async)]
 fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<WorkspaceInfo, String> {
     // Tear down any prior session before swapping workspaces.
+    // Do not publish WorkspaceClosed here — the UI may still be processing the
+    // open response, and a late Closed event would wipe the new session.
     state.pyright.stop();
     state.search_index.stop();
+    state.fs.stop_watching();
     let info = state.workspace.open(&path).map_err(to_err)?;
     state.settings.bind_workspace(&info.root).ok();
     state.bus.publish(CoreEvent::WorkspaceOpened {
@@ -177,6 +182,20 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
     }
 
     Ok(info)
+}
+
+#[tauri::command]
+fn cmd_workspace_close(state: State<'_, AppState>) -> Result<(), String> {
+    if state.workspace.current().is_none() {
+        state.fs.stop_watching();
+        return Ok(());
+    }
+    state.pyright.stop();
+    state.search_index.stop();
+    state.fs.stop_watching();
+    state.workspace.close();
+    state.bus.publish(CoreEvent::WorkspaceClosed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -459,6 +478,11 @@ fn cmd_fs_rename(state: State<'_, AppState>, from: String, to: String) -> Result
 #[tauri::command(async)]
 fn cmd_fs_remove(state: State<'_, AppState>, path: String) -> Result<(), String> {
     state.fs.remove(Path::new(&path)).map_err(to_err)
+}
+
+#[tauri::command(async)]
+fn cmd_fs_stat(state: State<'_, AppState>, path: String) -> Result<FileStat, String> {
+    Ok(state.fs.stat(Path::new(&path)))
 }
 
 // ---------- Search ----------

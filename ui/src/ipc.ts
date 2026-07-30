@@ -124,9 +124,17 @@ export interface SearchResponse {
   content: SearchHit[];
 }
 
+export interface FileStat {
+  exists: boolean;
+  mtime_ms: number | null;
+  size: number | null;
+  is_dir: boolean | null;
+}
+
 export const ipc = {
   workspaceOpen: (path: string) =>
     invoke<WorkspaceInfo>("cmd_workspace_open", { path }),
+  workspaceClose: () => invoke<void>("cmd_workspace_close"),
   workspaceInfo: () =>
     invoke<WorkspaceInfo | null>("cmd_workspace_info"),
   recentProjectsGet: () =>
@@ -159,6 +167,7 @@ export const ipc = {
   fsRename: (from: string, to: string) =>
     invoke<void>("cmd_fs_rename", { from, to }),
   fsRemove: (path: string) => invoke<void>("cmd_fs_remove", { path }),
+  fsStat: (path: string) => invoke<FileStat>("cmd_fs_stat", { path }),
   search: (query: SearchQuery) =>
     invoke<SearchResponse>("cmd_search", { query }),
   searchStatus: () => invoke<SearchIndexStatus>("cmd_search_status"),

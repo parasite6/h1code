@@ -36,6 +36,11 @@ export interface ExplorerBinding {
   /** Begin an inline create at the current target dir (workspace root if none selected). */
   beginCreate(kind: CreateKind, explicitTargetDir?: string): Promise<void>;
   applyEvent(evt: CoreEvent): void;
+  /** Subtle indicator that a path drifted from disk outside the IDE. */
+  markExternalChange(path: string): void;
+  clearExternalChange(path: string): void;
+  moveExternalChange(from: string, to: string): void;
+  clearAllExternalChanges(): void;
 }
 
 interface NodeState {
@@ -117,6 +122,76 @@ export function mountExplorer(host: HTMLElement): ExplorerBinding {
   const scratchExpanded = new Set<string>();
   const scratchContainers = new Map<string, HTMLElement>();
   const scratchDepths = new Map<string, number>();
+  /** Paths that changed on disk outside the IDE (subtle tree dots). */
+  const externalChanges = new Set<string>();
+
+  function normExplorerPath(p: string): string {
+    return p.replace(/\\/g, "/");
+  }
+
+  function findNodeState(path: string): NodeState | undefined {
+    const direct = byPath.get(path);
+    if (direct) return direct;
+    const want = normExplorerPath(path);
+    for (const [key, state] of byPath) {
+      if (normExplorerPath(key) === want) return state;
+    }
+    return undefined;
+  }
+
+  function paintExternalChange(path: string) {
+    const state = findNodeState(path);
+    if (!state) return;
+    const marked = [...externalChanges].some(
+      (p) => normExplorerPath(p) === normExplorerPath(path)
+    );
+    state.el.classList.toggle("external-change", marked);
+    let dot = state.el.querySelector<HTMLElement>(".external-change-dot");
+    if (marked && !dot) {
+      dot = document.createElement("span");
+      dot.className = "external-change-dot";
+      dot.title = "Changed outside the IDE";
+      state.el.appendChild(dot);
+    } else if (!marked && dot) {
+      dot.remove();
+    }
+  }
+
+  function markExternalChange(path: string) {
+    // Always record the path so dots appear when a collapsed parent is later expanded.
+    externalChanges.add(path);
+    paintExternalChange(path);
+  }
+
+  function clearExternalChange(path: string) {
+    const want = normExplorerPath(path);
+    for (const p of [...externalChanges]) {
+      if (normExplorerPath(p) === want) externalChanges.delete(p);
+    }
+    paintExternalChange(path);
+  }
+
+  function moveExternalChange(from: string, to: string) {
+    const want = normExplorerPath(from);
+    let had = false;
+    for (const p of [...externalChanges]) {
+      if (normExplorerPath(p) === want) {
+        externalChanges.delete(p);
+        had = true;
+      }
+    }
+    if (had) {
+      externalChanges.add(to);
+    }
+    paintExternalChange(from);
+    paintExternalChange(to);
+  }
+
+  function clearAllExternalChanges() {
+    const prev = [...externalChanges];
+    externalChanges.clear();
+    for (const p of prev) paintExternalChange(p);
+  }
 
   let setRootCallId = 0;
   async function setRoot(root: string) {
@@ -196,6 +271,13 @@ export function mountExplorer(host: HTMLElement): ExplorerBinding {
 
     const state: NodeState = { entry, el, childrenWrap: null, expanded: false, depth };
     byPath.set(entry.path, state);
+    if ([...externalChanges].some((p) => normExplorerPath(p) === normExplorerPath(entry.path))) {
+      el.classList.add("external-change");
+      const dot = document.createElement("span");
+      dot.className = "external-change-dot";
+      dot.title = "Changed outside the IDE";
+      el.appendChild(dot);
+    }
 
     el.onclick = async () => {
       document
@@ -1068,9 +1150,19 @@ export function mountExplorer(host: HTMLElement): ExplorerBinding {
     if (
       evt.kind === "file_created" ||
       evt.kind === "file_removed" ||
-      evt.kind === "file_renamed"
+      evt.kind === "file_renamed" ||
+      evt.kind === "file_modified"
     ) {
-      const path = evt.kind === "file_renamed" ? evt.to : evt.path;
+      if (evt.kind === "file_renamed") {
+        refreshLevel(parentOf(evt.from)).catch(() => {});
+        refreshLevel(parentOf(evt.to)).catch(() => {});
+        return;
+      }
+      if (evt.kind === "file_modified") {
+        // Content-only edits: indicator is owned by fileSync; tree structure unchanged.
+        return;
+      }
+      const path = evt.path;
       const parent = parentOf(path);
       refreshLevel(parent).catch(() => {});
     }
@@ -1103,5 +1195,9 @@ export function mountExplorer(host: HTMLElement): ExplorerBinding {
     },
     beginCreate,
     applyEvent,
+    markExternalChange,
+    clearExternalChange,
+    moveExternalChange,
+    clearAllExternalChanges,
   };
 }

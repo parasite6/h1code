@@ -606,6 +606,17 @@ body.resizing #bottom-content {
 .file-tree-node .name {
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.file-tree-node .external-change-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  flex-shrink: 0;
+  opacity: 0.85;
+  margin-left: auto;
 }
 
 /* Inline create-file/create-folder input row */
@@ -873,11 +884,59 @@ body.resizing #bottom-content {
   min-width: 0;
   overflow: hidden;
   background: var(--bg-editor);
+  display: flex;
+  flex-direction: column;
+}
+
+#file-sync-banner {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(0, 122, 204, 0.12);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 12.5px;
+}
+#file-sync-banner.visible {
+  display: flex;
+}
+#file-sync-banner .file-sync-message {
+  flex: 1;
+  min-width: 0;
+}
+#file-sync-banner .file-sync-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+#file-sync-banner button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#file-sync-banner button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+#file-sync-banner button.primary {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #fff;
+}
+#file-sync-banner button.primary:hover {
+  background: var(--accent-hover);
 }
 
 /* Empty-State Polish: minimalist and clean */
 #editor-empty-state {
   height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1265,7 +1324,7 @@ body[data-welcome-zoom-tier="very-small"] .empty-action-btn {
   }
 }
 
-#editor { overflow: hidden; min-height: 0; height: 100%; }
+#editor { overflow: hidden; min-height: 0; height: 100%; flex: 1; }
 #editor.hidden { display: none; }
 #editor .cm-editor { height: 100%; }
 #editor .cm-editor.cm-focused { outline: none; }

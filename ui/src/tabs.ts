@@ -29,6 +29,12 @@ export interface TabsBinding {
   addBackground(path: string, name: string, content: string): void;
   close(path: string): void;
   renamePath(oldPath: string, newPath: string, newName?: string): void;
+  get(path: string): Tab | null;
+  /**
+   * Replace buffered content for an open tab. When `dirty` is provided, updates
+   * the dirty flag; otherwise leaves it unchanged.
+   */
+  setContent(path: string, content: string, opts?: { dirty?: boolean }): void;
   active(): Tab | null;
   setActive(path: string): void;
   updateActiveContent(content: string): void;
@@ -200,6 +206,19 @@ export function mountTabs(host: HTMLElement): TabsBinding {
       if (activePath === oldPath) activePath = newPath;
       render();
       if (activePath === newPath) listener?.(tab);
+    },
+    get(path: string) {
+      return tabs.get(path) ?? null;
+    },
+    setContent(path: string, content: string, opts?: { dirty?: boolean }) {
+      const tab = tabs.get(path);
+      if (!tab) return;
+      tab.content = content;
+      if (opts && opts.dirty !== undefined) {
+        tab.dirty = opts.dirty;
+      }
+      render();
+      if (activePath === path) listener?.(tab);
     },
     active() {
       return activePath ? tabs.get(activePath) ?? null : null;

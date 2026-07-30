@@ -10,6 +10,7 @@ import { ipc, onCoreEvent, type CoreDiagnostic, type CoreEvent, type RecentProje
 import { mountEditor } from "./editor";
 import { mountTabs, isTemporaryPath, type Tab } from "./tabs";
 import { mountExplorer, type ScratchEntry, type ScratchFile, type ScratchFolder } from "./explorer";
+import { createFileSync } from "./fileSync";
 import { confirmSave, confirmDialog, promptName, type SaveDecision } from "./modal";
 import { mountTerminal } from "./terminal";
 import { mountProblems, type ProblemEntry } from "./problems";
@@ -71,6 +72,9 @@ async function bootstrap() {
   const search = mountSearch($("panel-search"));
   const editorHost = $("editor");
   const editorEmptyState = $("editor-empty-state");
+  const fileSyncBanner = $("file-sync-banner");
+  const fileSyncMessage = fileSyncBanner.querySelector(".file-sync-message") as HTMLElement;
+  const fileSyncActions = fileSyncBanner.querySelector(".file-sync-actions") as HTMLElement;
   const runButton = $("btn-run");
   const runTargetPopover = $("run-target-popover");
   const runTargetSuggestion = $("run-target-suggestion");
@@ -78,6 +82,46 @@ async function bootstrap() {
   const runTargetSuppress = $("run-target-suppress");
   terminal.onFocusChange((focused) => {
     terminalFocused = focused;
+  });
+
+  const fileSync = createFileSync({
+    tabs,
+    explorer,
+    editor,
+    bannerEl: fileSyncBanner,
+    messageEl: fileSyncMessage,
+    actionsEl: fileSyncActions,
+    normPath,
+    pathIsDescendant: (path, ancestor) => pathIsDescendant(path, ancestor),
+    replacePathPrefix: (path, from, to) => replacePathPrefix(path, from, to),
+    basename: (path) => basename(path),
+    onTabsChanged: () => {
+      persistWorkspaceTabState().catch(() => {});
+    },
+    onDocReloaded: (path, content) => {
+      if (/\.pyi?$/i.test(path) && content.length <= PYRIGHT_MAX_DOC_CHARS) {
+        ipc.docDidClose(path).catch(() => {});
+        ipc.docDidOpen(path, content).catch(() => {});
+      }
+    },
+    onDocRenamed: (from, to) => {
+      const diagnostic = diagnostics.get(normPath(from));
+      if (diagnostic) {
+        diagnostics.delete(normPath(from));
+        diagnostics.set(normPath(to), { ...diagnostic, path: to });
+        refreshProblems();
+      }
+      if (/\.pyi?$/i.test(from)) {
+        ipc.docDidClose(from).catch(() => {});
+      }
+      const tab = tabs.get(to);
+      if (tab && /\.pyi?$/i.test(to) && tab.content.length <= PYRIGHT_MAX_DOC_CHARS) {
+        ipc.docDidOpen(to, tab.content).catch(() => {});
+      }
+    },
+    onSaveAs: () => {
+      void saveActiveAs();
+    },
   });
 
   // ── IDE-wide zoom ────────────────────────────────────────────────────────
@@ -508,6 +552,8 @@ async function bootstrap() {
       const nextPath = isDir ? replacePathPrefix(tab.path, from, to) : to;
       const diagnostic = diagnostics.get(normPath(oldPath));
       tabs.renamePath(oldPath, nextPath, basename(nextPath));
+      fileSync.clearBaseline(oldPath);
+      void fileSync.noteBaseline(nextPath);
       if (diagnostic) {
         diagnostics.delete(normPath(oldPath));
         diagnostics.set(normPath(nextPath), { ...diagnostic, path: nextPath });
@@ -668,6 +714,7 @@ async function bootstrap() {
       return false;
     }
     await cleanupRunTempDir();
+    fileSync.clear();
     // Drop any leftover tabs (untitled or dirty) before swapping workspace.
     for (const tab of tabs.all()) {
       tabs.close(tab.path);
@@ -688,6 +735,12 @@ async function bootstrap() {
       if (restoreLastActiveFile) {
         await restoreWorkspaceTabs(info.root);
       }
+      for (const tab of tabs.all()) {
+        if (!isTemporaryPath(tab.path)) {
+          await fileSync.noteBaseline(tab.path);
+        }
+      }
+      fileSync.startCheckup();
       renderEmptyState();
       return true;
     } catch (e) {
@@ -739,6 +792,12 @@ async function bootstrap() {
       return;
     }
     await cleanupRunTempDir();
+    fileSync.clear();
+    try {
+      await ipc.workspaceClose();
+    } catch {
+      /* ignore */
+    }
     for (const tab of tabs.all()) {
       tabs.close(tab.path);
     }
@@ -1021,10 +1080,12 @@ async function bootstrap() {
       if (currentWorkspace) {
         persistWorkspaceTabState().catch(() => {});
       }
+      fileSync.onActiveTab(tab);
     } else {
       showEditor(false);
       editor.setDoc("", "");
       editor.setDiagnostics([]);
+      fileSync.onActiveTab(null);
     }
   });
 
@@ -1039,6 +1100,10 @@ async function bootstrap() {
         ipc.docDidOpen(path, cur.content).catch(() => {});
       }
     }
+    if (!isTemporaryPath(path)) {
+      fileSync.clearDrift(path);
+      await fileSync.noteBaseline(path);
+    }
     persistWorkspaceTabState().catch(() => {});
   };
 
@@ -1050,6 +1115,8 @@ async function bootstrap() {
     }
     diagnostics.delete(normPath(path));
     refreshProblems();
+    fileSync.clearBaseline(path);
+    fileSync.clearDrift(path);
     baseClose(path);
     persistWorkspaceTabState().catch(() => {});
   };
@@ -1096,6 +1163,10 @@ async function bootstrap() {
     await baseSave(text);
     if (active && !isTemporaryPath(active.path) && /\.pyi?$/i.test(active.path)) {
       ipc.docDidSave(active.path, text).catch(() => {});
+    }
+    if (active && !isTemporaryPath(active.path)) {
+      fileSync.clearDrift(active.path);
+      await fileSync.noteBaseline(active.path);
     }
   };
 
@@ -1174,6 +1245,9 @@ async function bootstrap() {
       ipc.docDidOpen(picked, contents).catch(() => {});
       ipc.docDidSave(picked, contents).catch(() => {});
     }
+    fileSync.clearBaseline(active.path);
+    fileSync.clearDrift(active.path);
+    await fileSync.noteBaseline(picked);
     persistWorkspaceTabState().catch(() => {});
     return true;
   }
@@ -1468,6 +1542,8 @@ async function bootstrap() {
       try {
         const content = await ipc.fsReadLossy(path);
         tabs.openWithContent(path, name, content);
+        fileSync.clearDrift(path);
+        await fileSync.noteBaseline(path);
       } catch (e2) {
         terminal.log(`open failed: ${String(e2)}`, { newPrompt: true });
       }
@@ -1702,6 +1778,7 @@ async function bootstrap() {
     terminal.applyEvent(evt);
     explorer.applyEvent(evt);
     search.applyEvent(evt);
+    fileSync.handleEvent(evt);
 
     if (evt.kind === "process_exited" && evt.id === activePtyId) {
       activePtyId = null;
@@ -1730,6 +1807,7 @@ async function bootstrap() {
 
     if (evt.kind === "workspace_closed") {
       void cleanupRunTempDir();
+      fileSync.clear();
       currentWorkspace = null;
       scratchWorkspace = null;
       explorer.clearScratchRoot();
@@ -1737,6 +1815,10 @@ async function bootstrap() {
       diagnostics.clear();
       editor.setDiagnostics([]);
       refreshProblems();
+      // Close disk-backed tabs; leave untitled/scratch alone if any.
+      for (const tab of [...tabs.all()]) {
+        if (!isTemporaryPath(tab.path)) tabs.close(tab.path);
+      }
       renderEmptyState();
       updateWorkspaceUi(null);
     }
