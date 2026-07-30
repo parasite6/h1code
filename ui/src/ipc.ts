@@ -196,6 +196,13 @@ export interface InfillResponse {
   content: string;
 }
 
+export interface FimModelOption {
+  id: string;
+  label: string;
+  dir: string;
+  gguf: string;
+}
+
 export const ipc = {
   workspaceOpen: (path: string) =>
     invoke<WorkspaceInfo>("cmd_workspace_open", { path }),
@@ -301,6 +308,7 @@ export const ipc = {
     invoke<PreviewStateSnapshot>("cmd_preview_get_state"),
   autocompleteSettingsGet: () =>
     invoke<AutocompleteSettings>("cmd_autocomplete_settings_get"),
+  fimModelsList: () => invoke<FimModelOption[]>("cmd_fim_models_list"),
   llamaInfill: (payload: InfillRequest) =>
     invoke<InfillResponse>("cmd_llama_infill", { payload }),
   llamaInfillWarmup: (payload: {

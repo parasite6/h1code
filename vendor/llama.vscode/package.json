@@ -1,0 +1,2372 @@
+{
+  "name": "llama-vscode",
+  "displayName": "llama-vscode",
+  "description": "Local LLM-assisted text completion using llama.cpp",
+  "version": "0.0.56",
+  "publisher": "ggml-org",
+  "repository": "https://github.com/ggml-org/llama.vscode",
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "icon": "llama.png",
+  "activationEvents": [
+    "onLanguage:plaintext",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onCommand.acceptFirstLine"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "llama-vscode",
+        "displayName": "llama.vscode",
+        "managementCommand": "extension.showMenu"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "llama-vscode-sidebar",
+          "title": "llama-vscode",
+          "icon": "resources/llama-sidebar.svg"
+        }
+      ]
+    },
+    "languages": [
+      {
+        "id": "plaintext",
+        "aliases": [
+          "Plain Text"
+        ],
+        "extensions": [
+          ".txt"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "extension.triggerInlineCompletion",
+        "title": "llama-vscode: Trigger Inline Completion"
+      },
+      {
+        "command": "extension.triggerNoCacheCompletion",
+        "title": "llama-vscode: Trigger No Cache Completion"
+      },
+      {
+        "command": "extension.copyIntercept",
+        "title": "llama-vscode: Copy Intercept"
+      },
+      {
+        "command": "extension.cutIntercept",
+        "title": "llama-vscode: Cut Intercept"
+      },
+      {
+        "command": "extension.acceptFirstLine",
+        "title": "llama-vscode: Accept First Line"
+      },
+      {
+        "command": "extension.acceptFirstWord",
+        "title": "llama-vscode: Accept First Word"
+      },
+      {
+        "command": "extension.copyChunks",
+        "title": "llama-vscode: Copy Chunks"
+      },
+      {
+        "command": "extension.showMenu",
+        "title": "llama-vscode: Show Menu"
+      },
+      {
+        "command": "extension.askAi",
+        "title": "llama-vscode: Ask AI"
+      },
+      {
+        "command": "extension.editSelectedText",
+        "title": "llama-vscode: Edit Selected Text with AI"
+      },
+      {
+        "command": "extension.editAllSearchFiles",
+        "title": "llama-vscode: Edit All Search Files"
+      },
+      {
+        "command": "extension.acceptTextEdit",
+        "title": "llama-vscode: Accept Text Edit Suggestion"
+      },
+      {
+        "command": "extension.rejectTextEdit",
+        "title": "llama-vscode: Reject Text Edit Suggestion"
+      },
+      {
+        "command": "extension.killAgent",
+        "title": "llama-vscode: Kill Agent Session"
+      },
+      {
+        "command": "extension.generateGitCommitMessage",
+        "title": "llama-vscode: Generate Commit Message",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "extension.showLlamaWebview",
+        "title": "llama-vscode: Show Llama Agent",
+        "icon": "$(window)"
+      }
+    ],
+    "views": {
+      "llama-vscode-sidebar": [
+        {
+          "id": "llama-vscode.webview",
+          "name": "llama-vscode",
+          "when": "true",
+          "type": "webview",
+          "icon": "resources/llama-sidebar.svg"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "key": "tab",
+        "command": "editor.action.inlineSuggest.commit",
+        "when": "inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.triggerInlineCompletion",
+        "key": "ctrl+l",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.triggerNoCacheCompletion",
+        "key": "ctrl+shift+l",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.copyChunks",
+        "key": "ctrl+shift+,",
+        "when": "true"
+      },
+      {
+        "command": "extension.copyIntercept",
+        "key": "ctrl+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.cutIntercept",
+        "key": "ctrl+x",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.selectNextSuggestion",
+        "key": "alt+]",
+        "when": "editorTextFocus && inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.selectPreviousSuggestion",
+        "key": "alt+[",
+        "when": "editorTextFocus && inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.acceptFirstLine",
+        "key": "shift+tab",
+        "when": "editorTextFocus && inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.acceptFirstWord",
+        "key": "ctrl+right",
+        "when": "editorTextFocus && inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.showMenu",
+        "key": "ctrl+shift+m",
+        "when": "true"
+      },
+      {
+        "command": "extension.showLlamaWebview",
+        "key": "ctrl+shift+a",
+        "when": "true"
+      },
+      {
+        "command": "extension.askAi",
+        "key": "ctrl+;",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.askAiWithTools",
+        "key": "ctrl+Shift+t",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.editSelectedText",
+        "key": "ctrl+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "extension.acceptTextEdit",
+        "key": "tab",
+        "when": "editorTextFocus && textEditSuggestionVisible && resourceScheme == 'llama-suggestion'"
+      },
+      {
+        "command": "extension.killAgent",
+        "key": "ctrl+k ctrl+a",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.rejectTextEdit",
+        "key": "escape",
+        "when": "editorTextFocus && textEditSuggestionVisible && resourceScheme == 'llama-suggestion'"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "llama.vscode Configuration",
+      "properties": {
+        "llama-vscode.launch_completion": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting local fim llama.cpp server"
+        },
+        "llama-vscode.launch_chat": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting local chat llama.cpp server"
+        },
+        "llama-vscode.launch_embeddings": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting local embeddings llama.cpp server"
+        },
+        "llama-vscode.launch_tools": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting local lools llama.cpp server"
+        },
+        "llama-vscode.launch_training_completion": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting training a completion (fim) model from the menu"
+        },
+        "llama-vscode.launch_training_chat": {
+          "type": "string",
+          "default": "",
+          "description": "Shell command for starting training a chat model from the menu"
+        },
+        "llama-vscode.lora_completion": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the lora adapter file for the completion model. If not empty it will be used (appends --lora lora_completion) on starting the completion server with launch_completion"
+        },
+        "llama-vscode.lora_chat": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the lora adapter file for the chat model. If not empty it will be used (appends --lora lora_chat) on starting the completion server with launch_chat"
+        },
+        "llama-vscode.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "The URL to be used by the extension for code completion."
+        },
+        "llama-vscode.endpoint_chat": {
+          "type": "string",
+          "default": "",
+          "description": "The URL to be used by the extension for chat with ai."
+        },
+        "llama-vscode.endpoint_tools": {
+          "type": "string",
+          "default": "",
+          "description": "The URL to be used by the extension for chat with ai with tools use."
+        },
+        "llama-vscode.endpoint_embeddings": {
+          "type": "string",
+          "default": "",
+          "description": "The URL to be used by the extension for creating embeddings."
+        },
+        "llama-vscode.max_parallel_completions": {
+          "type": "number",
+          "default": 3,
+          "description": "The max number of parallel completions. Switching between completions could be done with Alt+] (next) or Alt =+[ (previous). "
+        },
+        "llama-vscode.new_completion_model_port": {
+          "type": "number",
+          "default": 8012,
+          "description": "The port will be used when a new completion model is created."
+        },
+        "llama-vscode.new_chat_model_port": {
+          "type": "number",
+          "default": 8011,
+          "description": "The port will be used when a new chat model is created."
+        },
+        "llama-vscode.new_embeddings_model_port": {
+          "type": "number",
+          "default": 8010,
+          "description": "The port will be used when a new embeddings model is created."
+        },
+        "llama-vscode.new_tools_model_port": {
+          "type": "number",
+          "default": 8009,
+          "description": "The port will be used when a new tools model is created."
+        },
+        "llama-vscode.new_completion_model_host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "The host will be used when a new completion model is created."
+        },
+        "llama-vscode.new_chat_model_host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "The host will be used when a new chat model is created."
+        },
+        "llama-vscode.new_embeddings_model_host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "The host will be used when a new embeddings model is created."
+        },
+        "llama-vscode.new_tools_model_host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "The host will be used when a new tools model is created."
+        },
+        "llama-vscode.ai_api_version": {
+          "type": "string",
+          "default": "v1",
+          "description": "The version of the API of the model. It is appended to the endpoints for chat and tools"
+        },
+        "llama-vscode.ai_model": {
+          "type": "string",
+          "default": "google/gemini-2.5-flash",
+          "description": "The model name. This is used in the request to the API. It is important when OpenRouter is used (for example google/gemini-2.5-flash)."
+        },
+        "llama-vscode.agents_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this agent to be shown to the user"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description of the agent - for what purposes should be used, what are his strengths, etc."
+              },
+              "subagentEnabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "If the agent could be used as subagent of another agent to execute a specific task."
+              },
+              "systemInstruction": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The system instructions for this agent",
+                "default": ""
+              },
+              "system_instruction": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Deprecated alias for systemInstruction",
+                "default": ""
+              },
+              "toolsModel": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this model to be shown to the user"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "description": "The endpoint, from where to access the model",
+                    "default": ""
+                  },
+                  "aiModel": {
+                    "type": "string",
+                    "description": "The name of the AI model as expected by the provider",
+                    "default": ""
+                  },
+                  "isKeyRequired": {
+                    "type": "boolean",
+                    "description": "Is key requried for the endpoint",
+                    "default": false
+                  },
+                  "localStartCommand": {
+                    "type": "string",
+                    "description": "Command to be used for sterting the model locally.",
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Tools, which will be used by default by this agent",
+                "default": []
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "default": [
+            {
+              "name": "llama-vscode help",
+              "description": "This is an agent for helping how to use llama-vscode.",
+              "systemInstruction": [
+                "You are an agent for helping the user how to use llama-vscode.",
+                "Use the available tools to get the help documentation for llama-vscode and answer the questions from the user.",
+                "Base your answers on the help documentation from the tools."
+              ],
+              "tools": [
+                "llama_vscode_help"
+              ]
+            },
+            {
+              "name": "default",
+              "description": "This is the default agent.",
+              "systemInstruction": [
+                "You are an agent for software development - please keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user.",
+                "Only terminate your turn when you are sure that the problem is solved.",
+                "If you are not sure about anything pertaining to the user’s request, use your tools to read files and gather the relevant information: do NOT guess or make up an answer.",
+                "You MUST plan extensively before each function call, and reflect extensively on the outcomes of the previous function calls. DO NOT do this entire process by making function calls only, as this can impair your ability to solve the problem and think insightfully.",
+                "Read the file content or a section of the file before editing a the file.",
+                "",
+                "# Workflow",
+                "",
+                "## High-Level Problem Solving Strategy",
+                "",
+                "1. Understand the problem deeply. Carefully read the issue and think critically about what is required.",
+                "2. Investigate the codebase. Explore relevant files, search for key functions, and gather context.",
+                "3. Develop a clear, step-by-step plan. Break down the fix into manageable, incremental steps.",
+                "4. Implement the fix incrementally. Make small, testable code changes.",
+                "5. Debug as needed. Use debugging techniques to isolate and resolve issues.",
+                "6. Iterate until the root cause is fixed.",
+                "7. Reflect and validate comprehensively.",
+                "",
+                "Refer to the detailed sections below for more information on each step.",
+                "",
+                "## 1. Deeply Understand the Problem",
+                "Carefully read the issue and think hard about a plan to solve it before coding.",
+                "",
+                "## 2. Codebase Investigation",
+                "- Explore relevant files and directories.",
+                "- Search for key functions, classes, or variables related to the issue.",
+                "- Read and understand relevant code snippets.",
+                "- Identify the root cause of the problem.",
+                "- Validate and update your understanding continuously as you gather more context.",
+                "",
+                "## 3. Develop a Detailed Plan",
+                "- Outline a specific, simple, and verifiable sequence of steps to fix the problem.",
+                "- Break down the fix into small, incremental changes.",
+                "",
+                "## 4. Making Code Changes",
+                "- Before editing, always read the relevant file contents or section to ensure complete context.",
+                "- If a patch is not applied correctly, attempt to reapply it.",
+                "- Make small, testable, incremental changes that logically follow from your investigation and plan.",
+                "",
+                "## 5. Debugging",
+                "- Make code changes only if you have high confidence they can solve the problem",
+                "- When debugging, try to determine the root cause rather than addressing symptoms",
+                "- Debug for as long as needed to identify the root cause and identify a fix",
+                "- Use print statements, logs, or temporary code to inspect program state, including descriptive statements or error messages to understand what's happening",
+                "- To test hypotheses, you can also add test statements or functions",
+                "- Revisit your assumptions if unexpected behavior occurs.",
+                "",
+                "",
+                "## 6. Final Verification",
+                "- Confirm the root cause is fixed.",
+                "- Review your solution for logic correctness and robustness.",
+                "- Iterate until you are extremely confident the fix is complete.",
+                "",
+                "## 7. Final Reflection",
+                "- If there are changed files, build the application to check for errors.",
+                "- Reflect carefully on the original intent of the user and the problem statement.",
+                "- Think about potential edge cases or scenarios.",
+                "- Continue refining until you are confident the fix is robust and comprehensive.",
+                ""
+              ],
+              "tools": [
+                "run_terminal_command",
+                "search_source",
+                "read_file",
+                "list_directory",
+                "regex_search",
+                "delete_file",
+                "get_diff",
+                "edit_file",
+                "ask_user",
+                "update_todo_list",
+                "delegate_task",
+                "get_errors",
+                "rename_symbol"
+              ]
+            },
+            {
+              "name": "Unit test writer",
+              "description": "Writes the unit tests. The input should provide a path to a source file to be tested.",
+              "systemInstruction": [
+                "You are an expert software engineer specializing in writing unit tests. Your task is to generate high‑quality, reliable, and maintainable unit tests based on the user’s instructions and the provided source code. You must infer the programming language, testing framework, and project conventions from the source file and any accompanying context (such as imports, file extensions, or existing test files).",
+                "Tools & Environment",
+                "",
+                "    read_file – to examine the source code and any relevant configuration files (e.g., package.json, pom.xml, requirements.txt, Cargo.toml, etc.).",
+                "",
+                "    edit_file – to create or modify test files.",
+                "",
+                "    run_terminal_command – to execute tests and report results.",
+                "",
+                "Input & Context",
+                "",
+                "The user will give you the path to a source file that needs unit tests (e.g., src/services/user_service.py, lib/user.dart, internal/user.go). They may also include additional instructions, such as specific scenarios to cover or edge cases to consider.",
+                "Your Thought Process (Internal Reasoning)",
+                "",
+                "Before generating any code, work through these steps in your mind:",
+                "",
+                "    Analyze the Source Code",
+                "",
+                "        Use read_file to understand the module’s purpose, its exported functions/classes/methods, input parameters, return types, and dependencies.",
+                "",
+                "        Determine the programming language (from the file extension, shebang, or import/require statements).",
+                "",
+                "        Identify all public APIs that need testing.",
+                "",
+                "        Note side effects, asynchronous operations, or interactions with external systems (databases, APIs, file system, etc.).",
+                "",
+                "    Infer the Testing Conventions",
+                "",
+                "        Look for an existing test directory (e.g., test/, tests/, spec/, __tests__/) and the naming pattern of existing test files (e.g., *.test.js, *_test.py, *_spec.rb).",
+                "",
+                "        Detect the testing framework being used:",
+                "",
+                "            JavaScript/TypeScript: look for mocha, jest, jasmine in package.json.",
+                "",
+                "            Python: look for pytest, unittest in imports or config files.",
+                "",
+                "            Java: look for JUnit in pom.xml or build.gradle.",
+                "",
+                "            Go: look for testing package imports, etc.",
+                "",
+                "        Determine the preferred assertion style (e.g., assert module, expect, should, assertThat).",
+                "",
+                "        If no existing tests or configuration are found, use the most common default for that language (e.g., pytest for Python, JUnit 5 for Java, go test for Go, Mocha + assert for Node.js).",
+                "",
+                "    Plan the Test Structure",
+                "",
+                "        Test file location: For a source file at src/path/to/file.ext, the test file should normally be placed at test/path/to/file_test.ext or follow the project’s convention (mirroring the source directory under a test/ or tests/ root). Ensure the directory structure is created if needed.",
+                "",
+                "        Plan the outer test suite (e.g., describe('moduleName', ...) in Mocha, a test class in JUnit, or a module‑level docstring in pytest).",
+                "",
+                "        Plan nested suites for each function or method.",
+                "",
+                "        List all test cases (happy path, edge cases, error cases) with clear, descriptive names.",
+                "",
+                "    Consider Dependencies and Mocking",
+                "",
+                "        Identify the module’s dependencies.",
+                "",
+                "        Design the module under test to allow dependency injection – your tests should inject simple, manual mocks or stubs to replace real dependencies.",
+                "",
+                "        Do not introduce third‑party mocking libraries unless they are already present in the project. Rely on manual mocks (e.g., creating test doubles yourself).",
+                "",
+                "        Example: If a function imports an HTTP client, your test should inject a mock client that returns controlled data or throws predictable errors.",
+                "",
+                "Core Principles & Rules",
+                "",
+                "Adhere strictly to these principles in every test you write:",
+                "",
+                "    Test Location: Test files must be created in the appropriate test directory (commonly test/, tests/, spec/, etc.) mirroring the source structure. Use the naming convention inferred from the project.",
+                "",
+                "    Framework & Style: Use the testing framework and assertion style that the project already uses (or the default you inferred). Write idiomatic tests for that language.",
+                "",
+                "    Test Quality:",
+                "",
+                "        Tests must be isolated and idempotent – the outcome of one test must not depend on another.",
+                "",
+                "        Each test should verify one specific behavior.",
+                "",
+                "        Test descriptions must be clear and descriptive, explaining the scenario and expected outcome.",
+                "",
+                "        Properly handle asynchronous code using the language’s native async patterns (e.g., async/await, Future, Promise). Ensure the test framework waits for completion.",
+                "",
+                "        Reset any module state or mocks in setup/teardown hooks (e.g., beforeEach, setUp, @BeforeEach) to guarantee tests can run in any order.",
+                "",
+                "    Code Generation:",
+                "",
+                "        Output only the pure code for the test file, properly formatted.",
+                "",
+                "        Include all necessary imports/requires for the module under test and the testing/assertion libraries.",
+                "",
+                "        Import the actual functions/classes from the source file. Mocking is done inside the test, not by mocking the import itself.",
+                "",
+                "    No Source Modification: You cannot modify the source code. If the source is untestable due to poor design (e.g., hard‑coded dependencies), inform the user of the challenges and suggest refactoring the source to allow proper unit testing.",
+                "",
+                "Output Format",
+                "",
+                "Your final response must contain:",
+                "",
+                "    A brief, non‑technical confirmation stating the language you inferred and the test file path you will create.",
+                "",
+                "Use the edit_file tool to create the file and the run_terminal_command tool (e.g., npx mocha 'test/services/userService.spec.ts') to verify your work, reporting the results back to the user.",
+                "",
+                "Crucially, you cannot modify the source code itself. If the source code is not testable due to poor design (e.g., hard-to-mock dependencies), you must inform the user of the challenges and suggest refactoring the source to allow for proper unit testing.",
+                ""
+              ],
+              "tools": [
+                "run_terminal_command",
+                "search_source",
+                "read_file",
+                "list_directory",
+                "regex_search",
+                "delete_file",
+                "edit_file",
+                "update_todo_list"
+              ],
+              "subagentEnabled": true
+            },
+            {
+              "name": "Agent creator",
+              "description": "Creates new agent. Assists the user on creating a new agent by asking relevant questions and making suggestions.",
+              "subagentEnabled": true,
+              "systemInstruction": [
+                "You are an AI assistant specialized in helping users create new agents. Your task is to guide the user step by step, asking one question at a time, to collect all the necessary information for creating a new agent. Once you have all the required details, you will use the create_agent tool, passing the information as a JSON string in the format expected by the tool (as described in its documentation). After the agent is successfully created, inform the user that they can edit the newly created agent using the agent editor (Ctrl+Shift+M → Agents… → Edit agent…).",
+                "",
+                "Required Information:",
+                "",
+                "    name (string): The name of the new agent.",
+                "",
+                "    description (string): A brief description of what the agent does.",
+                "",
+                "    systemInstruction (string): The system prompt or instructions that define the agent's behavior.",
+                "",
+                "Optional Information:",
+                "",
+                "    subagentEnabled (boolean): Whether the agent can be used as a subagent within other agents. Ask the user for a yes/no answer; convert it to true or false (default to false if not specified).",
+                "",
+                "    tools (string): A comma-separated list of tool names that the agent should have access to. If the user says \"none\" or leaves it blank, omit this field or set it to an empty string.",
+                "",
+                "Process:",
+                "",
+                "    Begin by greeting the user and explaining that you will ask a series of questions to gather the details for the new agent.",
+                "",
+                "    Ask for the name first. Wait for the user's response.",
+                "",
+                "    After receiving the name, ask for the description.",
+                "",
+                "    Then ask for the systemInstruction.",
+                "",
+                "    Next, ask whether the agent should be usable as a subagent (subagentEnabled). Prompt for a yes/no answer. If the answer is ambiguous, ask for clarification.",
+                "",
+                "    Finally, ask for any tools the agent should have. Prompt for a comma-separated list or indicate that they can say \"none\".",
+                "The available tools for the new agent are:",
+                "run_terminal_command: runs a terminal command and returns the output",
+                "search_source: searches the code base for the provided query and returns the most relevant chungs (works if RAG is enabled)",
+                "read_file: reads a file",
+                "list_directory: returns the content of a directory/folder",
+                "regex_search: does a regex search in the code base (requires RAG)",
+                "delete_file: deletes the a file",
+                "edit_file: creates are changes a source file",
+                "ask_user: asks user a question without interrupting the tools loop of the agent",
+                "llama_vscode_help: returns the documentation for llama-vscode extension",
+                "update_todo_list: creates or updates a todo list (plan)",
+                "delegate_task: delegates a task to a subagent and returns only the result (the subagent executes in another session, which reduces the context size)",
+                "get_errors: returns the errors from a file or the whole project",
+                "rename_symbol: renames a symbol in the code base",
+                "create_agent: creates a new agent from the provided json string",
+                "",
+                "    Once all information is collected, construct a JSON object with the appropriate keys. Ensure that boolean values are represented as true or false (without quotes) and that the tools string is included only if provided.",
+                "",
+                "        Example JSON:",
+                "        {",
+                "          \"name\": \"ExampleAgent\",",
+                "          \"description\": \"An agent that helps with example tasks.\",",
+                "          \"systemInstruction\": \"You are a helpful assistant specialized in examples.\",",
+                "          \"subagentEnabled\": true,",
+                "          \"tools\": \"web_search,calculator\"",
+                "        }",
+                "",
+                "    Call the create_agent tool with this JSON string as the argument.",
+                "",
+                "    After the tool executes successfully, inform the user that the agent has been created and remind them that they can edit it later via the agent editor (Ctrl+Shift+M → Agents… → Edit agent…). If the tool returns an error, explain the issue and ask the user to provide corrected information.",
+                "",
+                "Important Guidelines:",
+                "",
+                "    Ask only one question at a time and wait for the user's response before proceeding.",
+                "",
+                "    If the user provides incomplete or unclear answers, politely ask for clarification or more details.",
+                "",
+                "    Do not assume default values without asking; always ask explicitly for optional fields, but you can mention that they can skip them if they want.",
+                "",
+                "    Keep your tone friendly and helpful. Make the process feel like a guided conversation.",
+                "",
+                "    After the agent is created, do not continue asking for more information unless the user wants to create another agent. If they do, you may restart the process.",
+                "",
+                ""
+              ],
+              "tools": [
+                "create_agent"
+              ]
+            }
+          ],
+          "description": "The list of the agents, which could be selected"
+        },
+        "llama-vscode.agent_commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this agent to be shown to the user"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description of the model - for what purposes should be used, what are his strengths, etc."
+              },
+              "prompt": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The prompt to be sent to the agent",
+                "default": ""
+              },
+              "context": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Key words, which will be transformed to additional context for the agent",
+                "default": []
+              }
+            },
+            "required": [
+              "name",
+              "prompt"
+            ]
+          },
+          "default": [
+            {
+              "name": "about",
+              "description": "Reviews the project and provides information about it.",
+              "prompt": [
+                "What is this project about?",
+                "Provide an overview of the project - purpose, architecture, language, etc."
+              ],
+              "context": []
+            },
+            {
+              "name": "explain",
+              "description": "Explains the attached code/file.",
+              "prompt": [
+                "Explain the provided source code."
+              ],
+              "context": []
+            }
+          ],
+          "description": "The list of agent commands, which could be selected by the user"
+        },
+        "llama-vscode.completion_models_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this model to be shown to the user"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "The endpoint, from where to access the model",
+                "default": ""
+              },
+              "aiModel": {
+                "type": "string",
+                "description": "The name of the AI model as expected by the provider",
+                "default": ""
+              },
+              "isKeyRequired": {
+                "type": "boolean",
+                "description": "Is key requried for the endpoint",
+                "default": false
+              },
+              "localStartCommand": {
+                "type": "string",
+                "description": "Command to be used for sterting the model locally.",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "default": [
+            {
+              "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (<= 8GB VRAM)",
+              "localStartCommand": "llama serve --fim-qwen-1.5b-default -ngl 99 --port 8012",
+              "endpoint": "http://localhost:8012",
+              "aiModel": "",
+              "isKeyRequired": false
+            },
+            {
+              "name": "Qwen2.5-Coder-3B-Q8_0-GGUF (<= 16GB VRAM)",
+              "localStartCommand": "llama serve --fim-qwen-3b-default -ngl 99 --port 8012",
+              "endpoint": "http://localhost:8012",
+              "aiModel": "",
+              "isKeyRequired": false
+            },
+            {
+              "name": "Qwen2.5-Coder-7B-Q8_0-GGUF (> 16GB VRAM)",
+              "localStartCommand": "llama serve --fim-qwen-7b-default -ngl 99 --port 8012",
+              "endpoint": "http://localhost:8012",
+              "aiModel": "",
+              "isKeyRequired": false
+            },
+            {
+              "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (CPU Only)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF -ub 1024 -b 1024 -dt 0.1 --ctx-size 0 --cache-reuse 256 --port 8012",
+              "endpoint": "http://localhost:8012",
+              "aiModel": "",
+              "isKeyRequired": false
+            }
+          ],
+          "description": "The list of the completion (FIM) models, which could be selected"
+        },
+        "llama-vscode.chat_models_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this model to be shown to the user"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "The endpoint, from where to access the model",
+                "default": ""
+              },
+              "aiModel": {
+                "type": "string",
+                "description": "The name of the AI model as expected by the provider",
+                "default": ""
+              },
+              "isKeyRequired": {
+                "type": "boolean",
+                "description": "Is key requried for the endpoint",
+                "default": false
+              },
+              "localStartCommand": {
+                "type": "string",
+                "description": "Command to be used for sterting the model locally.",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "default": [
+            {
+              "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+              "endpoint": "http://127.0.0.1:8011"
+            },
+            {
+              "name": "Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF (<= 16GB VRAM)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+              "endpoint": "http://127.0.0.1:8011"
+            },
+            {
+              "name": "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF (> 16GB VRAM)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+              "endpoint": "http://127.0.0.1:8011"
+            },
+            {
+              "name": "Qwen2.5-Coder-14B-Instruct-Q8_0-GGUF (> 32GB VRAM)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-14B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+              "endpoint": "http://127.0.0.1:8011"
+            },
+            {
+              "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (CPU Only)",
+              "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ub 1024 -b 1024 -dt 0.1 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+              "endpoint": "http://127.0.0.1:8011"
+            },
+            {
+              "name": "gemini qat tools",
+              "localStartCommand": "llama serve -m c:\\ai\\gemma-3-4B-it-QAT-Q4_0.gguf --port 8011",
+              "endpoint": "http://localhost:8011",
+              "aiModel": "",
+              "isKeyRequired": false
+            },
+            {
+              "name": "OpenAI gpt-oss 20B",
+              "localStartCommand": "llama serve -hf ggml-org/gpt-oss-20b-GGUF -c 0 --jinja --reasoning-format none -np 2 --port 8011",
+              "endpoint": "http://localhost:8011",
+              "aiModel": "",
+              "isKeyRequired": false
+            }
+          ],
+          "description": "The list of chat models, which could be selected"
+        },
+        "llama-vscode.embeddings_models_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this model to be shown to the user"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "The endpoint, from where to access the model",
+                "default": ""
+              },
+              "aiModel": {
+                "type": "string",
+                "description": "The name of the AI model as expected by the provider",
+                "default": ""
+              },
+              "isKeyRequired": {
+                "type": "boolean",
+                "description": "Is key requried for the endpoint",
+                "default": false
+              },
+              "localStartCommand": {
+                "type": "string",
+                "description": "Command to be used for sterting the model locally.",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "default": [
+            {
+              "name": "Nomic-Embed-Text-V2-GGUF",
+              "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+              "endpoint": "http://127.0.0.1:8010"
+            }
+          ],
+          "description": "The list of embeddings models, which could be selected"
+        },
+        "llama-vscode.tools_models_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for this model to be shown to the user"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "The endpoint, from where to access the model",
+                "default": ""
+              },
+              "aiModel": {
+                "type": "string",
+                "description": "The name of the AI model as expected by the provider",
+                "default": ""
+              },
+              "isKeyRequired": {
+                "type": "boolean",
+                "description": "Is key requried for the endpoint",
+                "default": false
+              },
+              "localStartCommand": {
+                "type": "string",
+                "description": "Command to be used for sterting the model locally.",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "default": [
+            {
+              "name": "OpenAI gpt-oss 20B (LOCAL) (> 19GB VRAM)",
+              "localStartCommand": "llama serve -hf ggml-org/gpt-oss-20b-GGUF -c 0 --jinja --reasoning-format none -np 2 --port 8009",
+              "endpoint": "http://localhost:8009",
+              "aiModel": "",
+              "isKeyRequired": false
+            },
+            {
+              "name": "xAI: Grok 4 Fast (free for limited period), context: 2 000 000",
+              "localStartCommand": "",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "x-ai/grok-4-fast:free"
+            },
+            {
+              "name": "Sonoma Sky - 2,000,000 context $0/M input tokens $0/M output tokens as of 19.09.25 (OpenRouter)",
+              "localStartCommand": "",
+              "endpoint": "https://openrouter.ai/api",
+              "aiModel": "openrouter/sonoma-sky-alpha",
+              "isKeyRequired": true
+            },
+            {
+              "name": "Sonoma Dusk - 2,000,000 context $0/M input tokens $0/M output tokens as of 19.09.25 (OpenRouter)",
+              "localStartCommand": "",
+              "endpoint": "https://openrouter.ai/api",
+              "aiModel": "openrouter/sonoma-dusk-alpha",
+              "isKeyRequired": true
+            },
+            {
+              "name": "Z.AI: GLM 4.5 - 128000 context $0.60/M input tokens $2.20/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "z-ai/glm-4.5"
+            },
+            {
+              "name": "Z.AI: GLM 4.5 Air - 128.000 context $0.20/M input tokens $1.10/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "z-ai/glm-4.5-air"
+            },
+            {
+              "name": "Qwen: Qwen3 235B A22B Thinking 2507 - 262.144 context $0.118/M input tokens $0.118/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "qwen/qwen3-235b-a22b-thinking-2507"
+            },
+            {
+              "name": "Qwen: Qwen3 Coder - 262K context $0.30/M input tokens $1.20/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "qwen/qwen3-coder"
+            },
+            {
+              "name": "Qwen: Qwen3 235B A22B Instruct 2507 - 262K context $0.12/M input tokens $0.59/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "qwen/qwen3-235b-a22b-2507"
+            },
+            {
+              "name": "MoonshotAI: Kimi K2 - 131K context $0.55/M input tokens $2.20/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "moonshotai/kimi-k2"
+            },
+            {
+              "name": "Google: Gemini 2.5 Flash Lite - 1.05M context $0.10/M input tokens $0.40/M output tokens (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "google/gemini-2.5-flash-lite"
+            },
+            {
+              "name": "Google: Gemini 2.5 Flash - 1.05M context $0.30/M input tokens $2.50/M output tokens $1.238/K input imgs (OpenRouter)",
+              "endpoint": "https://openrouter.ai/api",
+              "isKeyRequired": true,
+              "aiModel": "google/gemini-2.5-flash"
+            },
+            {
+              "name": "openai/gpt-oss-20b - 131K context, $0,04/M input tokens, $0,16/M output tokens (OpenRouter)",
+              "localStartCommand": "",
+              "endpoint": "https://openrouter.ai/api",
+              "aiModel": "openai/gpt-oss-20b",
+              "isKeyRequired": true
+            },
+            {
+              "name": "OpenAI gpt-oss 120B - 131K context, $0,09/M input tokens, $0,45/M output tokens (OpenRouter)",
+              "localStartCommand": "",
+              "endpoint": "https://openrouter.ai/api",
+              "aiModel": "openai/gpt-oss-120b",
+              "isKeyRequired": true
+            }
+          ],
+          "description": "The list of tools models, which could be selected"
+        },
+        "llama-vscode.envs_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the env"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description of the env"
+              },
+              "completion": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this model to be shown to the user"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "description": "The endpoint, from where to access the model",
+                    "default": ""
+                  },
+                  "aiModel": {
+                    "type": "string",
+                    "description": "The name of the AI model as expected by the provider",
+                    "default": ""
+                  },
+                  "isKeyRequired": {
+                    "type": "boolean",
+                    "description": "Is key requried for the endpoint",
+                    "default": false
+                  },
+                  "localStartCommand": {
+                    "type": "string",
+                    "description": "Command to be used for sterting the model locally.",
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "chat": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this model to be shown to the user"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "description": "The endpoint, from where to access the model",
+                    "default": ""
+                  },
+                  "aiModel": {
+                    "type": "string",
+                    "description": "The name of the AI model as expected by the provider",
+                    "default": ""
+                  },
+                  "isKeyRequired": {
+                    "type": "boolean",
+                    "description": "Is key requried for the endpoint",
+                    "default": false
+                  },
+                  "localStartCommand": {
+                    "type": "string",
+                    "description": "Command to be used for sterting the model locally.",
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "embeddings": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this model to be shown to the user"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "description": "The endpoint, from where to access the model",
+                    "default": ""
+                  },
+                  "aiModel": {
+                    "type": "string",
+                    "description": "The name of the AI model as expected by the provider",
+                    "default": ""
+                  },
+                  "isKeyRequired": {
+                    "type": "boolean",
+                    "description": "Is key requried for the endpoint",
+                    "default": false
+                  },
+                  "localStartCommand": {
+                    "type": "string",
+                    "description": "Command to be used for sterting the model locally.",
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this model to be shown to the user"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "description": "The endpoint, from where to access the model",
+                    "default": ""
+                  },
+                  "aiModel": {
+                    "type": "string",
+                    "description": "The name of the AI model as expected by the provider",
+                    "default": ""
+                  },
+                  "isKeyRequired": {
+                    "type": "boolean",
+                    "description": "Is key requried for the endpoint",
+                    "default": false
+                  },
+                  "localStartCommand": {
+                    "type": "string",
+                    "description": "Command to be used for sterting the model locally.",
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name for this agent to be shown to the user"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Description of the model - for what purposes should be used, what are his strengths, etc."
+                  },
+                  "systemInstruction": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The system instructions for this agent",
+                    "default": ""
+                  },
+                  "system_instruction": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Deprecated alias for systemInstruction",
+                    "default": ""
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Tools, which will be used by default by this agent",
+                    "default": []
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "ragEnabled": {
+                "type": "boolean",
+                "default": true
+              },
+              "envStartLastUsed": {
+                "type": "boolean",
+                "default": false,
+                "description": "If true - starts the last used env on startup."
+              },
+              "complEnabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Enable/disable completions"
+              }
+            }
+          },
+          "default": [
+            {
+              "name": "Local, full package - min, gpt-oss 20B ( > 24GB VRAM | HD: 16 GB)",
+              "description": "Everything local, gpt-oss 20B for agent",
+              "completion": {
+                "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-1.5b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "OpenAI gpt-oss 20B",
+                "localStartCommand": "llama serve -hf ggml-org/gpt-oss-20b-GGUF -c 0 --jinja --reasoning-format none -np 2 --port 8009",
+                "endpoint": "http://localhost:8009",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, full package - medium, gpt-oss 20B (> 34 GB VRAM | HD: 20 GB)",
+              "description": "Everything local, gpt-oss 20B for agent",
+              "completion": {
+                "name": "Qwen2.5-Coder-3B-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-3b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "OpenAI gpt-oss 20B",
+                "localStartCommand": "llama serve -hf ggml-org/gpt-oss-20b-GGUF -c 0 --jinja --reasoning-format none -np 2 --port 8009",
+                "endpoint": "http://localhost:8009",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, full package - max, gpt-oss 20B (>48GB VRAM | HD: 30 GB)",
+              "description": "Everything local, gpt-oss 20B for agent",
+              "completion": {
+                "name": "Qwen2.5-Coder-7B-Q8_0-GGUF (> 16GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-7b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF (> 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "OpenAI gpt-oss 20B",
+                "localStartCommand": "llama serve -hf ggml-org/gpt-oss-20b-GGUF -c 0 --jinja --reasoning-format none -np 2 --port 8009",
+                "endpoint": "http://localhost:8009",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, only completions - CPU (HD: 1.6 GB)",
+              "description": "For laptops only with CPU, lightweight model for completion ",
+              "completion": {
+                "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (CPU Only)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Q8_0-GGUF -ub 1024 -b 1024 -dt 0.1 --ctx-size 0 --cache-reuse 256 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, only completions (<= 8GB VRAM | HD: 1.6 GB) ",
+              "description": "Only for code completions model Qwen2.5-Coder-1.5B-Q8_0-GGUF (<= 8GB VRAM)",
+              "completion": {
+                "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-1.5b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, only completions (<= 16GB VRAM | HD: 3,2 GB)",
+              "description": "Only for completions, model Qwen2.5-Coder-3B-Q8_0-GGUF (<= 16GB VRAM | HD: 3,2 GB)",
+              "completion": {
+                "name": "Qwen2.5-Coder-3B-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-3b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, only completions (> 16GB VRAM)",
+              "description": "Only for code completions, model Qwen2.5-Coder-7B-Q8_0-GGUF (> 16GB VRAM)",
+              "completion": {
+                "name": "Qwen2.5-Coder-7B-Q8_0-GGUF (> 16GB VRAM | HD: 8.1 GB)",
+                "localStartCommand": "llama serve --fim-qwen-7b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            },
+            {
+              "name": "Local, only chat & edit (CPU Only | HD: 2.2 GB)",
+              "description": "Only for chat with AI, model Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (CPU Only)",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (CPU Only)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ub 1024 -b 1024 -dt 0.1 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": ""
+              }
+            },
+            {
+              "name": "Local, only chat, chat with project context & edit (<= 16GB VRAM | HD: 4 GB)",
+              "description": "Could be used for edit with AI, chat with AI, chat with AI with project context Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF + embeddings model (<= 16GB VRAM)",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": ""
+              }
+            },
+            {
+              "name": "Local, only chat & edit (<= 8GB VRAM | HD: 1.65)",
+              "description": "Only for chat with AI and edit with AI, Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": ""
+              }
+            },
+            {
+              "name": "Local, only chat, chat with project context & edit (> 16GB VRAM | HD: 8.6 GB)",
+              "description": "Good for chat with AI, chat with AI with project context, edit Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF + embeddings model  (> 16GB VRAM)",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF (> 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": ""
+              }
+            },
+            {
+              "name": "Agent & chat (<= 16GB VRAM | HD: 3.8 GB) (requires OpenRouter API key)",
+              "description": "Agent qwen 3 from OpenRouter (requires OpenRouter API key),  chat and edit with small models (<= 16GB VRAM) ",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "Qwen: Qwen3 235B A22B Thinking 2507 - 262.144 context $0.118/M input tokens $0.118/M output tokens",
+                "endpoint": "https://openrouter.ai/api",
+                "isKeyRequired": true,
+                "aiModel": "qwen/qwen3-235b-a22b-thinking-2507"
+              }
+            },
+            {
+              "name": "Full package - min (<= 16GB VRAM | HD: 4 GB) (requires OpenRouter API key)",
+              "description": "The minimal configuration for completions (local), chat (local) and agent (remote - OpenRouter), requires OpenRouter API key for agent",
+              "completion": {
+                "name": "Qwen2.5-Coder-1.5B-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-1.5b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "Qwen: Qwen3 235B A22B Thinking 2507 - 262.144 context $0.118/M input tokens $0.118/M output tokens",
+                "endpoint": "https://openrouter.ai/api",
+                "isKeyRequired": true,
+                "aiModel": "qwen/qwen3-235b-a22b-thinking-2507"
+              }
+            },
+            {
+              "name": "Full package - medium (<= 32GB VRAM | HD: 7.1 GB) (requires OpenRouter API key)",
+              "description": "Agent qwen 3 from OpenRouter, completions & chat - medium size models, embeddings (<= 32GB VRAM))",
+              "completion": {
+                "name": "Qwen2.5-Coder-3B-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-3b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF (<= 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-3B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "Qwen: Qwen3 235B A22B Thinking 2507 - 262.144 context $0.118/M input tokens $0.118/M output tokens",
+                "endpoint": "https://openrouter.ai/api",
+                "isKeyRequired": true,
+                "aiModel": "qwen/qwen3-235b-a22b-thinking-2507"
+              }
+            },
+            {
+              "name": "Full package - max (>32 GB VRAM | HD: 17 GB) (requires OpenRouter API key)",
+              "description": "Agent - qwen 3 from OpenRouter (API key required), completions, chat (>32 GB VRAM) ",
+              "completion": {
+                "name": "Qwen2.5-Coder-7B-Q8_0-GGUF (> 16GB VRAM)",
+                "localStartCommand": "llama serve --fim-qwen-7b-default -ngl 99 --port 8012",
+                "endpoint": "http://localhost:8012",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF (> 16GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "Qwen: Qwen3 235B A22B Thinking 2507 - 262.144 context $0.118/M input tokens $0.118/M output tokens",
+                "endpoint": "https://openrouter.ai/api",
+                "isKeyRequired": true,
+                "aiModel": "qwen/qwen3-235b-a22b-thinking-2507"
+              }
+            },
+            {
+              "name": "OpenAI gpt-oss,  20B agent, chat - ( < 8GB VRAM | HD: 2.2 GB) (requires OpenRouter API key)",
+              "description": "agent - Open AI gpt-oss 20GB from OpenRouter (requires API key), chat - small model (< 8GB VRAM)",
+              "completion": {
+                "name": "",
+                "localStartCommand": ""
+              },
+              "chat": {
+                "name": "Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF (<= 8GB VRAM)",
+                "localStartCommand": "llama serve -hf ggml-org/Qwen2.5-Coder-1.5B-Instruct-Q8_0-GGUF -ngl 99 -ub 1024 -b 1024 --ctx-size 0 --cache-reuse 256 -np 2 --port 8011",
+                "endpoint": "http://127.0.0.1:8011"
+              },
+              "embeddings": {
+                "name": "Nomic-Embed-Text-V2-GGUF",
+                "localStartCommand": "llama serve -hf ggml-org/Nomic-Embed-Text-V2-GGUF -ngl 99 -ub 2048 -b 2048 --ctx-size 2048 --embeddings --port 8010",
+                "endpoint": "http://127.0.0.1:8010"
+              },
+              "tools": {
+                "name": "openai/gpt-oss-20b",
+                "localStartCommand": "",
+                "endpoint": "https://openrouter.ai/api",
+                "aiModel": "openai/gpt-oss-20b",
+                "isKeyRequired": true
+              }
+            },
+            {
+              "name": "Empty - no models",
+              "description": "For cases when the settings (endpoint*, Launch_*, Api_key*,  Ai_model) are used for configuring which servers to be used by llama-vscode instead of env.",
+              "completion": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "chat": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "embeddings": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              },
+              "tools": {
+                "name": "",
+                "localStartCommand": "",
+                "endpoint": "",
+                "aiModel": "",
+                "isKeyRequired": false
+              }
+            }
+          ],
+          "description": "The list of envs, which could be selected"
+        },
+        "llama-vscode.agent_rules": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a file (md format or plain text) with user defined rules for the agent, which will be appended to the system instructions. Path could be absolute or relative to the workspace root. Example: coding-rules.md (provided the file is in the project root) or /home/user/coding-rules.md"
+        },
+        "llama-vscode.env_start_last_used": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true - starts the last used env on startup."
+        },
+        "llama-vscode.ask_install_llamacpp": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, on starting VS Code - installation of llama.cpp will be suggested."
+        },
+        "llama-vscode.ask_upgrade_llamacpp_hours": {
+          "type": "number",
+          "default": 24,
+          "description": "How offen to ask the user to upgrade llama.cpp in hours."
+        },
+        "llama-vscode.env_start_last_used_confirm": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, before starting the last used env, the user is asked for confirmation. Used only if env_start_last_used = true"
+        },
+        "llama-vscode.auto": {
+          "type": "boolean",
+          "default": true,
+          "description": "If code completion should be triggered automatically (true) or only by pressing Ctrl+l."
+        },
+        "llama-vscode.debounce_ms": {
+          "type": "number",
+          "default": 0,
+          "description": "Milliseconds to wait after the last keystroke before sending a completion request (0 = disabled). Useful on low-end hardware to avoid triggering inference on every keystroke."
+        },
+        "llama-vscode.api_key": {
+          "type": "string",
+          "default": "",
+          "description": "llama.cpp completion server api key or OpenAI endpoint API key (optional)"
+        },
+        "llama-vscode.api_key_chat": {
+          "type": "string",
+          "default": "",
+          "description": "llama.cpp chat server api key"
+        },
+        "llama-vscode.api_key_tools": {
+          "type": "string",
+          "default": "",
+          "description": "llama.cpp AI with tools server api key"
+        },
+        "llama-vscode.api_key_embeddings": {
+          "type": "string",
+          "default": "",
+          "description": "llama.cpp embeddings server api key"
+        },
+        "llama-vscode.self_signed_certificate": {
+          "type": "string",
+          "default": "",
+          "description": "self-signed certificate file - path/to/cert.pem"
+        },
+        "llama-vscode.health_check_interval_s": {
+          "type": "number",
+          "default": 30,
+          "description": "Models health check interval in seconds"
+        },
+        "llama-vscode.health_check_compl_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Works only for llama.cpp servers - enables health check for completion model"
+        },
+        "llama-vscode.health_check_chat_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Works only for llama.cpp servers - enables health check for chat model"
+        },
+        "llama-vscode.health_check_embs_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Works only for llama.cpp servers - enables health check for embeddings model"
+        },
+        "llama-vscode.health_check_tools_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Works only for llama.cpp servers - enables health check for tools model"
+        },
+        "llama-vscode.n_prefix": {
+          "default": 256,
+          "type": "number",
+          "description": "number of lines before the cursor location to include in the local prefix"
+        },
+        "llama-vscode.n_suffix": {
+          "type": "number",
+          "default": 64,
+          "description": "number of lines after  the cursor location to include in the local suffix"
+        },
+        "llama-vscode.n_predict": {
+          "type": "number",
+          "default": 128,
+          "description": "max number of tokens to predict"
+        },
+        "llama-vscode.t_max_prompt_ms": {
+          "type": "number",
+          "default": 500,
+          "description": "max alloted time for the prompt processing (TODO: not yet supported)"
+        },
+        "llama-vscode.t_max_predict_ms": {
+          "type": "number",
+          "default": 500,
+          "description": "max alloted time for the prediction"
+        },
+        "llama-vscode.show_info": {
+          "type": "boolean",
+          "default": true,
+          "description": "show extra info about the inference (false - disabled, true - show extra info in status line)"
+        },
+        "llama-vscode.max_line_suffix": {
+          "type": "number",
+          "default": 8,
+          "description": "do not auto-trigger FIM completion if there are more than this number of characters to the right of the cursor"
+        },
+        "llama-vscode.max_cache_keys": {
+          "type": "number",
+          "default": 250,
+          "description": "max number of cached completions to keep in result_cache"
+        },
+        "llama-vscode.ring_n_chunks": {
+          "type": "number",
+          "default": 16,
+          "description": "max number of chunks to pass as extra context to the server (0 to disable)"
+        },
+        "llama-vscode.ring_chunk_size": {
+          "type": "number",
+          "default": 64,
+          "description": "max size of the chunks (in number of lines). Note: adjust these numbers so that you don't overrun your context at ring_n_chunks = 64 and ring_chunk_size = 64 you need ~32k context"
+        },
+        "llama-vscode.ring_scope": {
+          "type": "number",
+          "default": 1024,
+          "description": "the range around the cursor position (in number of lines) for gathering chunks after FIM"
+        },
+        "llama-vscode.ring_update_ms": {
+          "type": "number",
+          "default": 1000,
+          "description": "how often to process queued chunks in normal mode"
+        },
+        "llama-vscode.rag_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable rag features - i.e. chat with AI with project context"
+        },
+        "llama-vscode.rag_chunk_max_chars": {
+          "type": "number",
+          "default": 2000,
+          "description": "Max number of chars per RAG chunk"
+        },
+        "llama-vscode.rag_max_lines_per_chunk": {
+          "type": "number",
+          "default": 60,
+          "description": "Max number of lines per RAG chunk"
+        },
+        "llama-vscode.rag_max_chars_per_chunk_line": {
+          "type": "number",
+          "default": 300,
+          "description": "max chars for a chunk line, the rest of the line is cut"
+        },
+        "llama-vscode.rag_max_files": {
+          "type": "number",
+          "default": 10000,
+          "description": "max files to index for RAG search, 0 to switch off indexing"
+        },
+        "llama-vscode.rag_max_chunks": {
+          "type": "number",
+          "default": 30000,
+          "description": "max cunks for the RAG search"
+        },
+        "llama-vscode.rag_max_bm25_filter_chunks": {
+          "type": "number",
+          "default": 47,
+          "description": "max RAG chunks to filter with BM25 algorithm"
+        },
+        "llama-vscode.rag_max_embedding_filter_chunks": {
+          "type": "number",
+          "default": 5,
+          "description": "max RAG chunks to provide as context to the LLM"
+        },
+        "llama-vscode.rag_max_context_files": {
+          "type": "number",
+          "default": 3,
+          "description": "max number of complete files to send as context to the LLM"
+        },
+        "llama-vscode.rag_max_context_file_chars": {
+          "type": "number",
+          "default": 5000,
+          "description": "max chars for a context file. If the file is bigger it will be cut to avoid too big context."
+        },
+        "llama-vscode.rag_ignore_file": {
+          "type": "string",
+          "default": "",
+          "description": "File name (no long path, just name, for example .ragignore), which contains list of files/folders to ignore for RAG search. The file content should follow the .gitignore format. The project could contain many files with this name in different folders for big projects (similar to .gitignore files)."
+        },
+        "llama-vscode.tool_run_terminal_command_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool run_terminal_command"
+        },
+        "llama-vscode.tool_create_agent_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool create_agent"
+        },
+        "llama-vscode.tool_get_errors_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool get_errors"
+        },
+        "llama-vscode.tool_rename_symbol_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool rename_symbol"
+        },
+        "llama-vscode.tools_custom": {
+          "type": "array",
+          "description": "Array of tool definitions for REST requests to LLM",
+          "items": {
+            "type": "object",
+            "description": "Tool details",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "If the tool is enabled or not"
+              },
+              "tool_function": {
+                "type": "string",
+                "default": "",
+                "description": "The function, which will be executed on calling the tool."
+              },
+              "tool_function_desc": {
+                "type": "string",
+                "default": "",
+                "description": "The function, which will generate the description to show when the tools is executed"
+              },
+              "tool": {
+                "type": "object",
+                "description": "Tool definition",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "Type of the tool",
+                    "enum": [
+                      "function"
+                    ]
+                  },
+                  "function": {
+                    "type": "object",
+                    "description": "Function definition",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the function"
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Description of the function"
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "description": "Function parameters schema",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "description": "Type of parameters object",
+                            "enum": [
+                              "object"
+                            ]
+                          },
+                          "properties": {
+                            "type": "object",
+                            "description": "Function properties definition",
+                            "additionalProperties": true
+                          },
+                          "required": {
+                            "type": "array",
+                            "description": "Required properties",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "properties"
+                        ]
+                      },
+                      "strict": {
+                        "type": "boolean",
+                        "description": "Whether to use strict validation"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "description",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "function"
+                ]
+              }
+            }
+          },
+          "default": []
+        },
+        "llama-vscode.context_custom": {
+          "type": "object",
+          "properties": {
+            "get_list": {
+              "type": "string",
+              "default": "",
+              "description": "The function to be executed to get the list of context objects (value | key). Function of type () => string[] "
+            },
+            "get_item_context": {
+              "type": "string",
+              "default": "",
+              "description": "The function to get the item context from the stored item key/value. Async function of type (k:string, v:string) => string"
+            }
+          },
+          "default": {
+            "get_list": "",
+            "get_item_context": ""
+          }
+        },
+        "llama-vscode.tool_permit_some_terminal_commands": {
+          "type": "boolean",
+          "default": false,
+          "description": "Permit AI to execute some safe terminal commands, which do not change the environment (no guarantee) "
+        },
+        "llama-vscode.tool_permit_file_changes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Permit AI to edit and delete files without user confirmation"
+        },
+        "llama-vscode.tool_search_source_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool search_source"
+        },
+        "llama-vscode.tool_read_file_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool read_file"
+        },
+        "llama-vscode.tool_list_directory_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool list_directory"
+        },
+        "llama-vscode.tool_regex_search_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool regex_search"
+        },
+        "llama-vscode.tool_delete_file_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool delete_file"
+        },
+        "llama-vscode.tool_get_diff_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool delete_file"
+        },
+        "llama-vscode.tool_edit_file_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool edit_file"
+        },
+        "llama-vscode.tool_ask_user_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool ask_user"
+        },
+        "llama-vscode.tool_custom_tool_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable tool custom_tool"
+        },
+        "llama-vscode.tool_llama_vscode_help_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable tool llama-vscode_help"
+        },
+        "llama-vscode.tool_update_todo_list_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool update_todo_list"
+        },
+        "llama-vscode.tool_delegate_task_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable tool delegate_task"
+        },
+        "llama-vscode.tool_search_tools_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable tool search_tools"
+        },
+        "llama-vscode.tool_custom_tool_description": {
+          "type": "string",
+          "default": "Use this tool to get information about ...",
+          "description": "Description for the custom_tool, which will be sent to the AI. The result of the tool execution will be the content of file or web page from property custom_tool_source."
+        },
+        "llama-vscode.tool_custom_tool_source": {
+          "type": "string",
+          "default": "https://news.smol.ai/",
+          "description": "The long name of a text file (for example c:\\ai\\llms_basics.txt) or URL of a web page (should start with 'http' i.e. https://news.test.com), which content will be returned by the custom_tool when called. Not all web pages are parsed correctly. "
+        },
+        "llama-vscode.tool_custom_eval_tool_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable tool custom_eval_tool"
+        },
+        "llama-vscode.tool_custom_eval_tool_description": {
+          "type": "string",
+          "default": "Use this tool to calculate an arithmetic expression.Example: '15 + 4' or '12/4'",
+          "description": "Description for the custom_eval_tool, which will be sent to the AI. The result of the tool will be the result from the execution of the typescript code from setting custom_eval_tool_code. This is powerful, but could be security risk. Be careful."
+        },
+        "llama-vscode.tool_custom_eval_tool_property_description": {
+          "type": "string",
+          "default": "The arithmetic expression to be calculated. Example: '5 + 7' or '(3456*5678) - 256' ",
+          "description": "The description of the property (input) for the custom_eval_tool. "
+        },
+        "llama-vscode.tool_custom_eval_tool_code": {
+          "type": "string",
+          "default": "function(input) { return eval(input); }",
+          "description": "The javascript function to be executed when the tool is called. It should have one parameter of type string. When called, the parameter will be the value provided by the AI in the tool property. This is powerful, but could be security risk. Be careful."
+        },
+        "llama-vscode.tools_max_iterations": {
+          "type": "number",
+          "default": 20,
+          "description": "Max number of iterations with AI when working with tools. If you are working with paid AI providers, big number here could result in higher costs."
+        },
+        "llama-vscode.auto_memory_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable auto memory (automatically accumulate knowledge across sessions)"
+        },
+        "llama-vscode.max_auto_memory_files": {
+          "type": "number",
+          "default": 10,
+          "description": "Max number of .md files to store in auto memory. The AI will be instructed  to reorganize the auto memory files if they are more than the limit."
+        },
+        "llama-vscode.popup_max_chars": {
+          "type": "number",
+          "default": 160,
+          "description": "Max number of characters to display in a popup window. If the message has more chars it will be shown in editor window. Set 0 to show all messages in editor window."
+        },
+        "llama-vscode.plan_review_frequency": {
+          "type": "number",
+          "default": 5,
+          "description": "How often (interations count) the plan/todos should be sent to the LLM again during a session."
+        },
+        "llama-vscode.chats_max_history": {
+          "type": "number",
+          "default": 50,
+          "description": "Max number of chats to store in history. An old chat is removed if needed on adding a new chat"
+        },
+        "llama-vscode.chats_max_tokens": {
+          "type": "number",
+          "default": 64000,
+          "description": "Max number of tokens per chat (1 token ~4 chars). If the chat is longer, the initial part will be summarized. This is approximate - the detection is by counting the chars in a chat (assuming 1 token is 4 chars)."
+        },
+        "llama-vscode.lm_max_input_tokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Max input tokens advertised to VS Code for models provided through the Copilot model list. Set to 0 to auto-detect from provider metadata or llama.cpp runtime properties when available. Set a positive value to force an override."
+        },
+        "llama-vscode.lm_max_output_tokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Max output tokens advertised to VS Code for models provided through the Copilot model list. Set to 0 to auto-detect from provider metadata when available and otherwise use the extension default. Set a positive value to force an override. The advertised output limit is also used as the max_tokens request cap for chat completions from the VS Code LM provider."
+        },
+        "llama-vscode.chats_summarize_old_msgs": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true - summarizes the old messages (keeps total chats_msgs_keep), when the chats_max_chars limit is reached, to reduce the context size. After the summarization, the first request could be very slow as the whole chat should be processed again (no chache reuse)."
+        },
+        "llama-vscode.chats_msgs_keep": {
+          "type": "number",
+          "default": 50,
+          "description": "The number of messages to keep summarizing a chat."
+        },
+        "llama-vscode.tools_log_calls": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the details about the tools calls in UI - arguments and results."
+        },
+        "llama-vscode.skills_folder": {
+          "type": "string",
+          "default": "",
+          "description": "The folder, where are the skills are stored. If empty , <project_folder>/skills will be used."
+        },
+        "llama-vscode.language": {
+          "type": "string",
+          "default": "en",
+          "description": "language: bg - Bulgarian (Български), cn - Chinese (中文), en - English, fr - French (Français), de - German (Deutsch), ru - Russian (Русский), es - Spanish (Español)"
+        },
+        "llama-vscode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable completions"
+        },
+        "llama-vscode.languageSettings": {
+          "type": "object",
+          "default": {
+            "*": true
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Enable/disable suggestions for specific languages"
+        },
+        "llama-vscode.use_openai_endpoint": {
+          "type": "boolean",
+          "default": false,
+          "description": "[EXPERIMENTAL] Use OAI endpoint. Slow and poor quality - avoid using"
+        },
+        "llama-vscode.openai_client_model": {
+          "type": "string",
+          "default": "",
+          "description": "The FIM friendly model supported by your OpenAI compatible endpoint to be used (e.g., Qwen2.5-Coder-14B-4-bit)"
+        },
+        "llama-vscode.openai_prompt_template": {
+          "type": "string",
+          "default": "<|fim_prefix|>{inputPrefix}{prompt}<|fim_suffix|>{inputSuffix}<|fim_middle|>",
+          "description": "The prompt template to be used for the OpenAI compatible endpoint."
+        },
+        "llama-vscode.telegram_api_token": {
+          "type": "string",
+          "default": "",
+          "description": "The Telegram API Key token for your Telegram Bot. How create your bot: in Telegram open bot @BotFather, click Start and execute the command /newbot. There you will see the bot API token."
+        },
+        "llama-vscode.telegram_bot_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable Telegram Bot. If enabled and telegram_api_token is provided, the agent prompts could be sent from phones (with telegram message to the bot)."
+        },
+        "llama-vscode.telegram_bot_users": {
+          "type": "string",
+          "default": "",
+          "description": "Comma separated list of Telegram users IDs, which are authorized to send messages to the bot. This is a security restriction. You could find your telegram user ID by sending command /start to @userinfobot."
+        },
+        "llama-vscode.telegram_chunk_size": {
+          "type": "number",
+          "default": 250,
+          "description": "The size of the chunks (in chars), which are sent as AI response to Telegram. Each chunk is a separate message."
+        }
+      }
+    },
+    "menus": {
+      "scm/title": [
+        {
+          "command": "extension.generateGitCommitMessage",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "extension.editSelectedText",
+          "when": "editorHasSelection",
+          "group": "llama@1"
+        },
+        {
+          "command": "extension.showLlamaWebview",
+          "when": "editorHasSelection",
+          "group": "llama@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "watch": "tsc -watch -p ./",
+    "build-ui": "cd ui && npm install && npm run build",
+    "dev-ui": "cd ui && npm install && npm run dev",
+    "postinstall": "npm run build-ui",
+    "test": "node ./dist/test/runTest.js",
+    "compile": "tsc -p ./",
+    "bundle": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js --minify",
+    "vscode:prepublish": "npm run bundle",
+    "lint": "eslint --ext .ts,.tsx .",
+    "format": "prettier --write --ignore-path .gitignore '**/*'"
+  },
+  "dependencies": {
+    "axios": "^1.16.0",
+    "globby": "^14.1.0",
+    "ignore": "^7.0.4",
+    "js-yaml": "^4.1.1",
+    "node-telegram-bot-api": "^1.2.0",
+    "openai": "^4.80.1",
+    "picomatch": "^4.0.2",
+    "remark-gfm": "^4.0.1",
+    "simple-git": "^3.28.0"
+  },
+  "devDependencies": {
+    "@babel/types": "^7.28.4",
+    "@types/micromatch": "^4.0.9",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.0.0",
+    "@types/picomatch": "^4.0.0",
+    "@types/vscode": "^1.109.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.27.0",
+    "glob": "^11.0.3",
+    "mocha": "^11.3.0",
+    "typescript": "^4.8.0",
+    "webpack": "^5.100.2",
+    "webpack-cli": "^4.10.0"
+  },
+  "extensionDependencies": [
+    "vscode.git"
+  ]
+}

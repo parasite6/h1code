@@ -9,6 +9,7 @@ pub mod commands;
 pub mod dap;
 pub mod errors;
 pub mod events;
+pub mod fim_models;
 pub mod fs_service;
 pub mod lsp;
 pub mod path_jail;

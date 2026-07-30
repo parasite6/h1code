@@ -17,6 +17,7 @@ use tracing_subscriber::EnvFilter;
 
 use ide_core::autocomplete_settings::{self, AutocompleteSettings};
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
+use ide_core::fim_models::{self, FimModelOption};
 use ide_core::fs_service::{DirEntry, FileSniff, FileStat, FsService};
 use ide_core::path_jail;
 use ide_core::preview_settings::PreviewEngine;
@@ -140,6 +141,7 @@ fn main() {
             cmd_preview_reload_url,
             cmd_preview_get_state,
             cmd_autocomplete_settings_get,
+            cmd_fim_models_list,
             cmd_llama_infill,
             cmd_llama_infill_warmup,
         ])
@@ -917,6 +919,11 @@ fn cmd_autocomplete_settings_get(
 ) -> Result<AutocompleteSettings, String> {
     let root = require_workspace_root(&state)?;
     Ok(autocomplete_settings::load_autocomplete_settings(&root))
+}
+
+#[tauri::command(async)]
+fn cmd_fim_models_list() -> Result<Vec<FimModelOption>, String> {
+    Ok(fim_models::FIM_MODEL_CATALOG.to_vec())
 }
 
 #[tauri::command(async)]

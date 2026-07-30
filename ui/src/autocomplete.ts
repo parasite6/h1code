@@ -1,5 +1,5 @@
 // FIM autocomplete: debounce → prefix/suffix + ring-buffer context → /infill via IPC.
-// Logic ported from ggml-org/llama.vscode (not a verbatim copy).
+// Logic ported from vendor/llama.vscode (MIT); see ui/src/fimModels.ts for relative GGUF paths.
 
 import * as monaco from "monaco-editor";
 import {

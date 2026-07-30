@@ -79,24 +79,42 @@ See `crates/ide-cli/src/main.rs` for the full command list.
 
 Local fill-in-the-middle suggestions via an external `llama-server`. Off by default.
 
-1. Launch a FIM-capable model (example CodeGemma 2B):
+FIM client logic was adapted from [`vendor/llama.vscode`](vendor/llama.vscode/) ([ggml-org/llama.vscode](https://github.com/ggml-org/llama.vscode), **MIT**). Model GGUF trees live at the project root and are gitignored (not shipped on clone).
+
+1. Place a FIM-capable GGUF under the project root (examples already used locally):
+
+- `codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf`
+- `Qwen2.5-Coder-1.5B-GGUF/Qwen2.5-Coder-1.5B.Q4_K_M.gguf`
+
+2. Launch `llama-server` from the project root (adjust the server binary to your install):
 
 ```bash
-/home/andrewunknown/llama-cuda/llama-b10189/llama-server \
-  -m "/run/media/andrewunknown/storage112/LM Studio/lmstudio-community/codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf" \
+# from the <h1code> repo root
+llama-server \
+  -m "./codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf" \
   --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
 ```
 
-2. In the workspace, create/edit `.h1code/settings.toml`:
+Or with Qwen2.5-Coder 1.5B:
+
+```bash
+llama-server \
+  -m "./Qwen2.5-Coder-1.5B-GGUF/Qwen2.5-Coder-1.5B.Q4_K_M.gguf" \
+  --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
+```
+
+3. In the workspace, create/edit `.h1code/settings.toml`:
 
 ```toml
 autocomplete_enabled = true
 # optional: autocomplete_endpoint = "http://127.0.0.1:8081"
 ```
 
-3. Re-open the workspace (or restart). Ghost text appears after a short debounce; **Tab** accepts, otherwise Tab still indents.
+4. Re-open the workspace (or restart). Ghost text appears after a short debounce; **Tab** accepts, otherwise Tab still indents.
 
 HTML/CSS files discard completions that look like React/PHP/template injections (`useState`, `onChange={`, `<?php`, `{{`, `@foreach`).
+
+Known model relative paths for Settings UI are listed in [`ui/src/fimModels.ts`](ui/src/fimModels.ts) / [`crates/ide-core/src/fim_models.rs`](crates/ide-core/src/fim_models.rs).
 
 ## Project layout
 
@@ -111,6 +129,10 @@ HTML/CSS files discard completions that look like React/PHP/template injections 
 ├── ui/                     # Vite + TS frontend
 │   ├── index.html
 │   └── src/
+├── vendor/
+│   └── llama.vscode/       # FIM reference source (MIT; not a build dep)
+├── codegemma-2b-GGUF/      # local GGUF (gitignored)
+├── Qwen2.5-Coder-1.5B-GGUF/# local GGUF (gitignored)
 └── docs/
     └── bug-tracker.md
 ```
@@ -118,3 +140,5 @@ HTML/CSS files discard completions that look like React/PHP/template injections 
 ## License
 
 None yet 😅️
+
+Third-party: `vendor/llama.vscode` is MIT (Copyright 2025 The llama.vscode contributors).

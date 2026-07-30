@@ -1,0 +1,98 @@
+# Exclude development sources and tests
+src/**
+ui/src/**
+ui/node_modules/**
+ui/package.json
+ui/package-lock.json
+src/test/**
+dist/test/**
+**/*.test.*
+**/*.spec.*
+
+# Exclude maps and TypeScript sources from package
+**/*.map
+**/*.ts
+**/*.tsx
+
+# Exclude build configs and project metadata not needed at runtime
+.eslintrc*
+.eslint*
+.prettier*
+*.code-workspace
+.vscode/**
+.vscode-test/**
+.git/**
+.gitignore
+.gitmodules
+.npmrc
+.github/**
+.nyc_output/**
+coverage/**
+
+# Exclude local artifacts
+*.vsix
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Keep only runtime bundles and assets
+!dist/**
+!ui/dist/**
+!resources/**
+!llama.png
+!package.json
+!README.md
+!LICENSE
+ 
+# Exclude production dependencies (we bundle the extension code)
+node_modules/**
+# Exclude VCS and workspace config
+.git/**
+.github/**
+.vscode/**
+
+# Do not ship TypeScript sources or source maps
+src/**
+**/*.map
+**/*.ts
+**/*.tsx
+**/*.test.*
+**/*.spec.*
+
+# VS Code testing/coverage artifacts
+.vscode-test/**
+coverage/**
+
+# Build artifacts and local packages
+*.vsix
+.vsix/**
+
+# UI workspace: keep only built assets
+ui/**
+!ui/dist/**
+
+# Keep built extension output and resources
+!dist/**
+!resources/**
+!llama.png
+!README.md
+!LICENSE
+!package.json
+
+# Node modules: keep runtime code but drop heavy non-runtime extras
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/__tests__/**
+node_modules/**/benchmark/**
+node_modules/**/benchmarks/**
+node_modules/**/example/**
+node_modules/**/examples/**
+node_modules/**/doc/**
+node_modules/**/docs/**
+node_modules/**/man/**
+node_modules/**/.github/**
+node_modules/**/.vscode/**
+
+# Logs and misc
+npm-debug.log*
+yarn-error.log*
