@@ -35,11 +35,26 @@ function normPath(p: string): string {
   return p.replace(/\\/g, "/").toLowerCase();
 }
 
-function debugRecentProjects(message: string, details?: Record<string, unknown>) {
-  const payload = details ?? {};
-  if (localStorage.getItem("h1code.debug.recentProjects") === "1") {
-    console.debug(`[recent-projects] ${message}`, payload);
+/** Gated `[recent-debug]` logger — enable with localStorage `h1code.debug.recent=1`. */
+function recentDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem("h1code.debug.recent") === "1";
+  } catch {
+    return false;
   }
+}
+
+function pushRecentDebugEntry(label: string, payload: Record<string, unknown>) {
+  const entry = { t: Date.now(), label, payload };
+  try {
+    const w = window as unknown as { __recentDebugLog?: Array<typeof entry> };
+    if (!w.__recentDebugLog) w.__recentDebugLog = [];
+    w.__recentDebugLog.push(entry);
+  } catch {
+    /* ignore */
+  }
+  // eslint-disable-next-line no-console
+  console.log("[recent-debug]", label, payload);
 }
 
 interface TempWorkspace {
@@ -50,6 +65,24 @@ interface TempWorkspace {
 }
 
 async function bootstrap() {
+  // Arm recent-debug before any load/persist so cold-start reads are captured.
+  try {
+    const params = new URLSearchParams(location.search);
+    const phase = params.get("reproRecent");
+    if (phase === "write" || phase === "read" || params.get("debugRecent") === "1") {
+      localStorage.setItem("h1code.debug.recent", "1");
+    }
+    if (
+      params.get("debugNewFolder") === "1" ||
+      params.get("reproNewFolder") === "menu" ||
+      params.get("reproNewFolder") === "sidebar"
+    ) {
+      localStorage.setItem("h1code.debug.newfolder", "1");
+    }
+  } catch {
+    /* ignore */
+  }
+
   let activePtyId: string | null = null;
   /** Whether the active PTY is an interactive shell or a one-shot Run. */
   let activePtyKind: "shell" | "run" | null = null;
@@ -216,80 +249,187 @@ async function bootstrap() {
     return new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 
+  function recentDebug(label: string, extra?: Record<string, unknown>) {
+    if (!recentDebugEnabled()) return;
+    const payload = {
+      workspace: currentWorkspace?.root ?? null,
+      scratch: scratchWorkspace
+        ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name }
+        : null,
+      recentCount: recentProjects.length,
+      ...extra,
+    };
+    pushRecentDebugEntry(label, payload);
+    try {
+      terminal.log(`[recent-debug] ${label} ${JSON.stringify(payload)}`);
+    } catch {
+      /* terminal may not be ready during early boot */
+    }
+  }
+
   function getLocalRecentProjects(): RecentProject[] {
     try {
       const raw = localStorage.getItem("h1code.recentProjects");
+      recentDebug("localStorage.read", {
+        storageKey: "h1code.recentProjects",
+        raw,
+        rawLength: raw?.length ?? 0,
+      });
       if (!raw) return [];
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {
-        return list.filter((p: any) => p && typeof p.path === "string" && typeof p.name === "string");
+        const filtered = list.filter(
+          (p: any) => p && typeof p.path === "string" && typeof p.name === "string"
+        );
+        recentDebug("localStorage.parsed", {
+          count: filtered.length,
+          paths: filtered.map((p: RecentProject) => p.path),
+        });
+        return filtered;
       }
+      recentDebug("localStorage.skip", { reason: "not-array" });
     } catch (e) {
       console.error("Error reading recent projects", e);
+      recentDebug("localStorage.error", { error: String(e) });
     }
     return [];
   }
 
-  /** Keep only recent project folders that still exist on disk. */
+  /** Keep only recent project folders that still exist on disk.
+   * Uses unjailed `recentProjectPathCheck` — NOT `fsList` — so cold-start
+   * prune does not treat NoWorkspace / jail failure as "path missing".
+   * Fail closed: keep on present or ambiguous error; drop only when missing.
+   */
   async function pruneMissingRecentProjects(projects: RecentProject[]): Promise<RecentProject[]> {
+    recentDebug("prune.start", {
+      count: projects.length,
+      paths: projects.map((p) => p.path),
+      note: "uses ipc.recentProjectPathCheck (unjailed)",
+    });
     const kept: RecentProject[] = [];
     for (const project of projects) {
       try {
-        await ipc.fsList(project.path);
+        const check = await ipc.recentProjectPathCheck(project.path);
+        if (check.status === "missing") {
+          recentDebug("prune.drop", {
+            path: project.path,
+            reason: "missing",
+            skip: "path positively absent or not a directory",
+          });
+          continue;
+        }
+        if (check.status === "error") {
+          recentDebug("prune.keep", {
+            path: project.path,
+            reason: "check-error-fail-closed",
+            message: check.message,
+          });
+        } else {
+          recentDebug("prune.keep", { path: project.path, reason: "present" });
+        }
         kept.push(project);
-      } catch {
-        debugRecentProjects("pruned missing recent project", { path: project.path });
+      } catch (e) {
+        // IPC failure is ambiguous — keep (fail closed), never wipe.
+        recentDebug("prune.keep", {
+          path: project.path,
+          reason: "ipc-error-fail-closed",
+          error: String(e),
+        });
+        kept.push(project);
       }
     }
+    recentDebug("prune.done", {
+      before: projects.length,
+      after: kept.length,
+      keptPaths: kept.map((p) => p.path),
+      dropped: projects.length - kept.length,
+    });
     return kept;
   }
 
   async function loadRecentProjects() {
+    recentDebug("load.start", { api: "ipc.recentProjectsGet / settings recentProjects" });
     let migratedFromLocal = false;
     try {
-      recentProjects = trimRecentProjects(await ipc.recentProjectsGet());
-      debugRecentProjects("loaded from backend", {
-        count: recentProjects.length,
-        paths: recentProjects.map((project) => project.path),
+      const backendRaw = await ipc.recentProjectsGet();
+      recentDebug("load.backend", {
+        count: backendRaw.length,
+        paths: backendRaw.map((project) => project.path),
+        api: "cmd_recent_projects_get → settings.get_user(recentProjects)",
       });
+      recentProjects = trimRecentProjects(backendRaw);
       if (recentProjects.length === 0) {
         const local = getLocalRecentProjects();
-        debugRecentProjects("backend empty; checked localStorage fallback", {
+        recentDebug("load.backendEmpty.fallbackLocal", {
           count: local.length,
           paths: local.map((project) => project.path),
         });
         if (local.length > 0) {
           recentProjects = trimRecentProjects(local);
           migratedFromLocal = true;
+        } else {
+          recentDebug("load.skip", { reason: "backend-and-local-empty" });
         }
       }
     } catch (e) {
       console.error("Error loading recent projects", e);
+      recentDebug("load.backendError", { error: String(e) });
       recentProjects = trimRecentProjects(getLocalRecentProjects());
       migratedFromLocal = recentProjects.length > 0;
     }
 
     const before = recentProjects.length;
+    const beforePaths = recentProjects.map((p) => p.path);
     recentProjects = trimRecentProjects(await pruneMissingRecentProjects(recentProjects));
-    if (migratedFromLocal || recentProjects.length !== before) {
+    const willPersist = migratedFromLocal || recentProjects.length !== before;
+    recentDebug("load.afterPrune", {
+      before,
+      after: recentProjects.length,
+      beforePaths,
+      afterPaths: recentProjects.map((p) => p.path),
+      migratedFromLocal,
+      willPersist,
+      persistReason: migratedFromLocal
+        ? "migrated-from-localStorage"
+        : recentProjects.length !== before
+          ? "prune-changed-count"
+          : "none",
+    });
+    if (willPersist) {
       await persistRecentProjects();
     }
+    recentDebug("load.done", {
+      count: recentProjects.length,
+      paths: recentProjects.map((p) => p.path),
+    });
   }
 
   async function persistRecentProjects() {
+    const beforeLocal = localStorage.getItem("h1code.recentProjects");
     localStorage.setItem("h1code.recentProjects", JSON.stringify(recentProjects));
+    recentDebug("persist.localStorage", {
+      storageKey: "h1code.recentProjects",
+      count: recentProjects.length,
+      paths: recentProjects.map((project) => project.path),
+      previousRaw: beforeLocal,
+      nextRaw: localStorage.getItem("h1code.recentProjects"),
+    });
     try {
       await ipc.recentProjectsSet(recentProjects);
-      debugRecentProjects("persisted", {
+      recentDebug("persist.backend.ok", {
+        api: "cmd_recent_projects_set → settings.set_user(recentProjects)",
         count: recentProjects.length,
         paths: recentProjects.map((project) => project.path),
       });
     } catch (e) {
       console.error("Error saving recent projects", e);
+      recentDebug("persist.backend.fail", { error: String(e) });
     }
   }
 
   async function addToRecentProjects(path: string, name: string) {
+    const before = recentProjects.map((p) => p.path);
+    recentDebug("add.start", { path, name, before });
     recentProjects = recentProjects.filter(p => normPath(p.path) !== normPath(path));
     recentProjects.unshift({
       name: name,
@@ -297,10 +437,19 @@ async function bootstrap() {
       lastOpened: Date.now()
     });
     recentProjects = trimRecentProjects(recentProjects);
+    recentDebug("add.afterUnshift", {
+      path,
+      name,
+      after: recentProjects.map((p) => p.path),
+    });
     await persistRecentProjects();
+    recentDebug("add.done", { path, name, count: recentProjects.length });
   }
 
   function trimRecentProjects(projects: RecentProject[]) {
+    if (projects.length > 4) {
+      recentDebug("trim", { before: projects.length, after: 4 });
+    }
     return projects.slice(0, 4);
   }
 
@@ -853,6 +1002,7 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      recentDebug("openWorkspace.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
       if (restoreLastActiveFile) {
         await restoreWorkspaceTabs(info.root);
@@ -864,8 +1014,10 @@ async function bootstrap() {
       }
       fileSync.startCheckup();
       renderEmptyState();
+      recentDebug("openWorkspace.ok", { root: info.root });
       return true;
     } catch (e) {
+      recentDebug("openWorkspace.fail", { path, error: String(e) });
       terminal.log(`Failed to open workspace: ${String(e)}`, { newPrompt: true });
       return false;
     }
@@ -900,20 +1052,39 @@ async function bootstrap() {
     tabs.openTemporaryFile(name);
   }
 
+  /** When set, createFolderFromEmptyState skips the name modal (diagnosis only). */
+  let debugForcedScratchWorkspaceName: string | null = null;
+
   async function createFolderFromEmptyState() {
-    const name = await promptName({
-      title: "Name your scratch workspace",
-      description: "This creates a temporary workspace root for your unsaved files and folders. The root exists only while working in scratch mode and helps organize temporary project structure before saving to disk.",
-      label: "Workspace name",
-      initialValue: "Scratch Workspace",
-      confirmLabel: "Start Workspace",
+    // File → New Folder semantics: leave cwd / open workspace and start a new
+    // scratch folder-workspace (name prompt). Not an in-explorer inline create.
+    newfolderDebug("createFolderFromEmptyState:prompt-start", {
+      locationDialog: false,
+      namePrompt: !debugForcedScratchWorkspaceName,
+      forcedName: debugForcedScratchWorkspaceName,
+      note: "no openDialog; modal names the new scratch workspace outside cwd",
     });
+    let name = debugForcedScratchWorkspaceName;
     if (!name) {
+      name = await promptName({
+        title: "Name your scratch workspace",
+        description: "This creates a temporary workspace root for your unsaved files and folders. The root exists only while working in scratch mode and helps organize temporary project structure before saving to disk.",
+        label: "Workspace name",
+        initialValue: "Scratch Workspace",
+        confirmLabel: "Start Workspace",
+      });
+    } else {
+      newfolderDebug("createFolderFromEmptyState:using-forced-name", { name });
+    }
+    if (!name) {
+      newfolderDebug("createFolderFromEmptyState:prompt-result", { result: "cancelled" });
       saveDebug("createFolderFromEmptyState:cancelled");
       return;
     }
+    newfolderDebug("createFolderFromEmptyState:prompt-result", { result: "ok", name });
 
     if (!(await confirmDiscardAllUnsaved("Starting a scratch workspace will close current open files."))) {
+      newfolderDebug("createFolderFromEmptyState:discard-aborted");
       saveDebug("createFolderFromEmptyState:discard-aborted");
       return;
     }
@@ -943,6 +1114,12 @@ async function bootstrap() {
     search.setWorkspaceRoot(null);
     updateWorkspaceUi(null);
     showEditor(false);
+    newfolderDebug("createFolderFromEmptyState:ok", {
+      scratchName: scratchWorkspace.name,
+      scratchRoot: scratchWorkspace.rootPath,
+      createdInCwd: false,
+      createdPath: scratchWorkspace.rootPath,
+    });
     saveDebug("createFolderFromEmptyState:ok", {
       scratchName: scratchWorkspace.name,
       scratchRoot: scratchWorkspace.rootPath,
@@ -1028,7 +1205,8 @@ async function bootstrap() {
     const shortcutsSection = document.querySelector<HTMLElement>(".empty-state-shortcuts");
     
     if (!listContainer || !recentSection || !shortcutsSection) {
-      debugRecentProjects("render empty state skipped: missing DOM", {
+      recentDebug("render.skip", {
+        reason: "missing-DOM",
         hasListContainer: Boolean(listContainer),
         hasRecentSection: Boolean(recentSection),
         hasShortcutsSection: Boolean(shortcutsSection),
@@ -1038,10 +1216,21 @@ async function bootstrap() {
 
     const recents = recentProjects;
     const shouldShowRecents = !currentWorkspace && !scratchWorkspace && recents.length > 0;
-    debugRecentProjects("render empty state", {
+    recentDebug("render.start", {
       currentWorkspace: currentWorkspace?.root ?? null,
+      scratch: scratchWorkspace?.rootPath ?? null,
       count: recents.length,
+      paths: recents.map((p) => p.path),
       showRecents: shouldShowRecents,
+      skipReason: shouldShowRecents
+        ? null
+        : currentWorkspace
+          ? "workspace-open"
+          : scratchWorkspace
+            ? "scratch-open"
+            : recents.length === 0
+              ? "empty-list"
+              : "unknown",
     });
     
     if (shouldShowRecents) {
@@ -1096,7 +1285,7 @@ async function bootstrap() {
       recentSection.classList.add("hidden");
       shortcutsSection.classList.remove("hidden");
     }
-    debugRecentProjects("render empty state applied", {
+    recentDebug("render.applied", {
       recentSectionHidden: recentSection.classList.contains("hidden"),
       shortcutsHidden: shortcutsSection.classList.contains("hidden"),
       listChildren: listContainer.children.length,
@@ -1402,6 +1591,41 @@ async function bootstrap() {
     }
   }
 
+  /** Gated `[newfolder-debug]` — enable with localStorage `h1code.debug.newfolder=1`. */
+  function newfolderDebugEnabled(): boolean {
+    try {
+      return localStorage.getItem("h1code.debug.newfolder") === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function newfolderDebug(label: string, extra?: Record<string, unknown>) {
+    if (!newfolderDebugEnabled()) return;
+    const payload = {
+      workspace: currentWorkspace?.root ?? null,
+      scratch: scratchWorkspace
+        ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name }
+        : null,
+      ...extra,
+    };
+    const entry = { t: Date.now(), label, payload };
+    try {
+      const w = window as unknown as { __newfolderDebugLog?: Array<typeof entry> };
+      if (!w.__newfolderDebugLog) w.__newfolderDebugLog = [];
+      w.__newfolderDebugLog.push(entry);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line no-console
+    console.log("[newfolder-debug]", label, payload);
+    try {
+      terminal.log(`[newfolder-debug] ${label} ${JSON.stringify(payload)}`);
+    } catch {
+      /* ignore */
+    }
+  }
+
   /**
    * Open `dir` as the workspace without wiping existing tabs.
    * Used when a standalone Save/Open picks a path and we need a jail root
@@ -1417,13 +1641,16 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      recentDebug("adoptWorkspaceRoot.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
       fileSync.startCheckup();
       renderEmptyState();
       saveDebug("adoptWorkspaceRoot:ok", { root: info.root });
+      recentDebug("adoptWorkspaceRoot.ok", { root: info.root });
       return true;
     } catch (e) {
       saveDebug("adoptWorkspaceRoot:fail", { error: String(e) });
+      recentDebug("adoptWorkspaceRoot.fail", { dir, error: String(e) });
       terminal.log(`Failed to open workspace: ${String(e)}`, { newPrompt: true });
       return false;
     }
@@ -1689,12 +1916,50 @@ async function bootstrap() {
     await createFileFromEmptyState();
   }
 
+  /**
+   * File menu → New Folder...
+   * Must start a new folder-workspace outside the current browsing context
+   * (scratch name prompt via createFolderFromEmptyState). Must NOT call
+   * explorer.beginCreate — that is the Explorer sidebar in-place shortcut.
+   */
   async function newFolderCommand() {
+    newfolderDebug("file-menu.newFolder:start", {
+      handler: "newFolderCommand",
+      entry: "file-menu / file.newFolder",
+      willCallBeginCreate: false,
+      willCallCreateFolderFromEmptyState: true,
+      note: "File menu must not reuse sidebar in-place create",
+    });
+    await createFolderFromEmptyState();
+    newfolderDebug("file-menu.newFolder:done", {
+      scratch: scratchWorkspace
+        ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name }
+        : null,
+      workspace: currentWorkspace?.root ?? null,
+    });
+  }
+
+  /** Explorer sidebar icon: in-place create under current tree selection / root. */
+  async function explorerNewFolderInPlace() {
+    newfolderDebug("sidebar.newFolder:start", {
+      handler: "explorerNewFolderInPlace",
+      entry: "explorer-sidebar-btn",
+      willCallBeginCreate: true,
+      locationDialog: false,
+      note: "intended in-place create; no destination prompt",
+    });
     if (currentWorkspace || scratchWorkspace) {
       await explorer.beginCreate("folder");
+      newfolderDebug("sidebar.newFolder:beginCreate", {
+        kind: "folder",
+        workspaceRoot: currentWorkspace?.root ?? null,
+        scratchRoot: scratchWorkspace?.rootPath ?? null,
+      });
       return;
     }
-    await createFolderFromEmptyState();
+    newfolderDebug("sidebar.newFolder:no-root", {
+      note: "no workspace/scratch; in-place create skipped (empty-state uses File New Folder)",
+    });
   }
 
   let handlingCloseRequest = false;
@@ -1977,7 +2242,8 @@ async function bootstrap() {
   const btnNewFolder = document.getElementById("btn-new-folder");
   if (btnNewFolder) {
     btnNewFolder.onclick = () => {
-      commands.execute("file.newFolder").catch((e) => terminal.log(`new folder failed: ${String(e)}`));
+      // Sidebar shortcut stays in-place; do not route through File → New Folder.
+      explorerNewFolderInPlace().catch((e) => terminal.log(`new folder failed: ${String(e)}`));
     };
   }
 
@@ -2255,9 +2521,9 @@ async function bootstrap() {
   });
 
   // Backend events
-  debugRecentProjects("before core event listener registration");
+  recentDebug("before core event listener registration");
   await onCoreEvent((evt) => routeEvent(evt));
-  debugRecentProjects("after core event listener registration");
+  recentDebug("after core event listener registration");
 
   function routeEvent(evt: CoreEvent) {
     terminal.applyEvent(evt);
@@ -2526,16 +2792,18 @@ async function bootstrap() {
 
   // Check if a workspace is already open on startup
   ipc.workspaceInfo().then(async (info) => {
-    debugRecentProjects("startup workspaceInfo resolved", {
+    recentDebug("startup.workspaceInfo", {
       workspace: info?.root ?? null,
       recentCount: recentProjects.length,
+      recentPaths: recentProjects.map((p) => p.path),
     });
     if (info) {
       currentWorkspace = info;
       updateWorkspaceUi(info);
       explorer.setRoot(info.root).catch(() => {});
-      debugRecentProjects("startup workspace found; recording recent project", {
+      recentDebug("startup.workspaceFound.addRecent", {
         path: info.root,
+        name: info.name,
       });
       addToRecentProjects(info.root, info.name).catch(() => {});
     }
@@ -2659,8 +2927,192 @@ async function bootstrap() {
           })();
         }, 800);
       }
+
+      // Recent-projects diagnosis: ?reproRecent=write|read
+      // write → open Music/lmao (or ?path=), persist, dump trace
+      // read  → dump cold-start load/prune/render trace (load already ran)
+      const recentPhase = params.get("reproRecent");
+      if (recentPhase === "write" || recentPhase === "read") {
+        localStorage.setItem("h1code.debug.recent", "1");
+        const targetPath =
+          params.get("path") ||
+          localStorage.getItem("h1code.debug.reproRecentPath") ||
+          "/home/andrewunknown/Music/lmao";
+        setTimeout(() => {
+          void (async () => {
+            recentDebug("repro.phase", { phase: recentPhase, targetPath });
+            try {
+              if (recentPhase === "write") {
+                // Close any leftover workspace so open path matches user Open Folder.
+                try {
+                  await ipc.workspaceClose();
+                } catch {
+                  /* ignore */
+                }
+                currentWorkspace = null;
+                scratchWorkspace = null;
+                explorer.clearScratchRoot();
+                updateWorkspaceUi(null);
+                recentDebug("repro.write.openWorkspace", { targetPath });
+                const ok = await openWorkspace(targetPath, false, true);
+                recentDebug("repro.write.afterOpen", {
+                  ok,
+                  workspace: currentWorkspace?.root ?? null,
+                  recentPaths: recentProjects.map((p) => p.path),
+                });
+                // Close workspace so empty-state render can show recents in-session.
+                try {
+                  await ipc.workspaceClose();
+                } catch {
+                  /* ignore */
+                }
+                currentWorkspace = null;
+                updateWorkspaceUi(null);
+                explorer.clearScratchRoot();
+                search.setWorkspaceRoot(null);
+                renderEmptyState();
+                recentDebug("repro.write.afterCloseForUi", {
+                  recentPaths: recentProjects.map((p) => p.path),
+                });
+              } else {
+                recentDebug("repro.read.snapshot", {
+                  recentPaths: recentProjects.map((p) => p.path),
+                  workspace: currentWorkspace?.root ?? null,
+                });
+                // Re-run load to capture a second pass with current jail state.
+                await loadRecentProjects();
+                renderEmptyState();
+                recentDebug("repro.read.afterReload", {
+                  recentPaths: recentProjects.map((p) => p.path),
+                });
+              }
+            } catch (e) {
+              recentDebug("repro.error", { phase: recentPhase, error: String(e) });
+            } finally {
+              try {
+                const w = window as unknown as { __recentDebugLog?: unknown[] };
+                const dumpTargets =
+                  recentPhase === "write"
+                    ? [targetPath, "/home/andrewunknown/Documents/github/h1code", "/tmp"]
+                    : ["/home/andrewunknown/Documents/github/h1code", "/home/andrewunknown/Music/lmao", "/tmp"];
+                for (const dumpRoot of dumpTargets) {
+                  try {
+                    // Prefer dumping into the already-open target without re-adding
+                    // unrelated roots to recent when possible.
+                    const alreadyOpen =
+                      currentWorkspace &&
+                      normPath(currentWorkspace.root) === normPath(dumpRoot);
+                    if (!alreadyOpen) {
+                      const dumpOk = await adoptWorkspaceRoot(dumpRoot);
+                      if (!dumpOk) continue;
+                    }
+                    const dumpPath = joinPath(
+                      dumpRoot,
+                      recentPhase === "write"
+                        ? "h1code-recent-debug-write.json"
+                        : "h1code-recent-debug-read.json"
+                    );
+                    await ipc.fsWrite(
+                      dumpPath,
+                      JSON.stringify(w.__recentDebugLog ?? [], null, 2) + "\n"
+                    );
+                    recentDebug("repro.trace-dumped", { dumpPath });
+                    break;
+                  } catch {
+                    /* try next */
+                  }
+                }
+              } catch (dumpErr) {
+                console.error("failed to dump recent-debug trace", dumpErr);
+              }
+            }
+          })();
+        }, 900);
+      }
     } catch (e) {
       console.error("scratch-save repro setup failed", e);
+    }
+
+    // New-Folder diagnosis: ?reproNewFolder=menu|sidebar
+    // menu → File-menu handler (must prompt / start scratch outside cwd)
+    // sidebar → in-place beginCreate (contrast; intended no destination dialog)
+    try {
+      const params = new URLSearchParams(location.search);
+      const nfPhase = params.get("reproNewFolder");
+      if (nfPhase === "menu" || nfPhase === "sidebar") {
+        localStorage.setItem("h1code.debug.newfolder", "1");
+        setTimeout(() => {
+          void (async () => {
+            newfolderDebug("repro:begin", { phase: nfPhase });
+            try {
+              // Ensure a browsing context exists so the old buggy File-menu path
+              // would have called beginCreate (in-cwd) — proving the split.
+              if (!currentWorkspace && !scratchWorkspace) {
+                scratchWorkspaceCounter += 1;
+                scratchWorkspace = {
+                  id: scratchWorkspaceCounter,
+                  name: "repro-cwd",
+                  rootPath: `scratch:${scratchWorkspaceCounter}`,
+                  children: [],
+                };
+                explorer.setScratchRoot(
+                  scratchWorkspace.name,
+                  scratchWorkspace.rootPath,
+                  scratchWorkspace.children
+                );
+                search.setWorkspaceRoot(null);
+                updateWorkspaceUi(null);
+                newfolderDebug("repro:seeded-scratch-cwd", {
+                  scratchRoot: scratchWorkspace.rootPath,
+                });
+              }
+              if (nfPhase === "menu") {
+                debugForcedScratchWorkspaceName = "FileMenu New Folder Repro";
+                try {
+                  await commands.execute("file.newFolder");
+                } finally {
+                  debugForcedScratchWorkspaceName = null;
+                }
+                newfolderDebug("repro:menu-after", {
+                  workspace: currentWorkspace?.root ?? null,
+                  scratch: scratchWorkspace
+                    ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name }
+                    : null,
+                  expect: "scratch outside prior cwd; no beginCreate",
+                });
+              } else {
+                await explorerNewFolderInPlace();
+                newfolderDebug("repro:sidebar-after", {
+                  workspace: currentWorkspace?.root ?? null,
+                  scratch: scratchWorkspace
+                    ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name }
+                    : null,
+                  expect: "beginCreate in-place; no destination prompt",
+                });
+              }
+            } catch (e) {
+              newfolderDebug("repro:error", { phase: nfPhase, error: String(e) });
+            } finally {
+              try {
+                const w = window as unknown as { __newfolderDebugLog?: unknown[] };
+                const repo = "/home/andrewunknown/Documents/github/h1code";
+                const dumpPath = joinPath(repo, "h1code-newfolder-debug-trace.json");
+                // Scratch/no-workspace state cannot use jailed fsWrite — adopt repo for dump only.
+                await adoptWorkspaceRoot(repo);
+                await ipc.fsWrite(
+                  dumpPath,
+                  JSON.stringify(w.__newfolderDebugLog ?? [], null, 2) + "\n"
+                );
+                newfolderDebug("repro:trace-dumped", { dumpPath });
+              } catch (dumpErr) {
+                console.error("failed to dump newfolder-debug trace", dumpErr);
+              }
+            }
+          })();
+        }, 800);
+      }
+    } catch (e) {
+      console.error("newfolder repro setup failed", e);
     }
   }).catch((e) => {
     console.error("Failed to query initial workspace", e);

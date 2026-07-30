@@ -1,0 +1,78 @@
+{
+  "index_settings": {
+    "docstore_compression": "lz4",
+    "docstore_blocksize": 16384
+  },
+  "segments": [
+    {
+      "segment_id": "4b38a1fe-3216-4eca-a3ba-c959baf02ba5",
+      "max_doc": 42,
+      "deletes": null
+    },
+    {
+      "segment_id": "6780ad73-90e6-436a-a6f9-b94760052bf9",
+      "max_doc": 37,
+      "deletes": null
+    },
+    {
+      "segment_id": "a863db40-5c5d-4fb7-a187-e76d2bd18a9c",
+      "max_doc": 17,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "path",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "kind",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": true,
+        "fast": false
+      }
+    }
+  ],
+  "opstamp": 987
+}

@@ -11,6 +11,7 @@ pub mod events;
 pub mod fs_service;
 pub mod lsp;
 pub mod path_jail;
+pub mod recent_path;
 pub mod preview_server;
 pub mod preview_settings;
 pub mod process;

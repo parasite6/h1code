@@ -33,6 +33,12 @@ export interface RecentProject {
   lastOpened: number;
 }
 
+/** Unjailed recent-project folder check (not subject to workspace FS jail). */
+export type RecentProjectPathCheck =
+  | { status: "present" }
+  | { status: "missing" }
+  | { status: "error"; message: string };
+
 export interface RuffDiagnostic {
   filename: string;
   code: string | null;
@@ -168,6 +174,9 @@ export const ipc = {
     invoke<RecentProject[]>("cmd_recent_projects_get"),
   recentProjectsSet: (projects: RecentProject[]) =>
     invoke<void>("cmd_recent_projects_set", { projects }),
+  /** Unjailed dir check for recent-projects prune (safe before workspace open). */
+  recentProjectPathCheck: (path: string) =>
+    invoke<RecentProjectPathCheck>("cmd_recent_project_path_check", { path }),
   workspaceLastActiveFileGet: (workspace: string) =>
     invoke<string | null>("cmd_workspace_last_active_file_get", {
       payload: { workspace },

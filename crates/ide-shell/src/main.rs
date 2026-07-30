@@ -99,6 +99,7 @@ fn main() {
             cmd_workspace_info,
             cmd_recent_projects_get,
             cmd_recent_projects_set,
+            cmd_recent_project_path_check,
             cmd_workspace_last_active_file_get,
             cmd_workspace_last_active_file_set,
             cmd_workspace_open_files_get,
@@ -238,10 +239,38 @@ struct RecentProject {
 
 const MAX_RECENT_PROJECTS: usize = 4;
 
+/// Unjailed directory existence check for recent-projects prune only.
+/// Must NOT go through [`jail_fs_path`] — prune runs before any workspace is open.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+enum RecentProjectPathCheck {
+    Present,
+    Missing,
+    Error { message: String },
+}
+
+#[tauri::command]
+fn cmd_recent_project_path_check(path: String) -> RecentProjectPathCheck {
+    use ide_core::recent_path::{check_recent_project_dir, RecentPathStatus};
+    let status = check_recent_project_dir(&path);
+    eprintln!(
+        "[recent-debug] path_check: path={path:?} status={status:?}"
+    );
+    match status {
+        RecentPathStatus::PresentDir => RecentProjectPathCheck::Present,
+        RecentPathStatus::Missing => RecentProjectPathCheck::Missing,
+        RecentPathStatus::Inaccessible(message) => RecentProjectPathCheck::Error { message },
+    }
+}
+
 #[tauri::command]
 fn cmd_recent_projects_get(state: State<'_, AppState>) -> Result<Vec<RecentProject>, String> {
     let Some(value) = state.settings.get_user("recentProjects") else {
-        tracing::debug!(
+        eprintln!(
+            "[recent-debug] get: empty (no key) settings_path={}",
+            state.settings.user_path().display()
+        );
+        tracing::info!(
             target: "h1code::recent_projects",
             settings_path = %state.settings.user_path().display(),
             raw_count = 0,
@@ -250,11 +279,17 @@ fn cmd_recent_projects_get(state: State<'_, AppState>) -> Result<Vec<RecentProje
         );
         return Ok(vec![]);
     };
-    let mut projects: Vec<RecentProject> = serde_json::from_value(value).map_err(to_err)?;
+    let mut projects: Vec<RecentProject> = serde_json::from_value(value.clone()).map_err(to_err)?;
     let raw_count = projects.len();
     projects.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));
     projects.truncate(MAX_RECENT_PROJECTS);
-    tracing::debug!(
+    let paths: Vec<&str> = projects.iter().map(|p| p.path.as_str()).collect();
+    eprintln!(
+        "[recent-debug] get: raw_count={raw_count} returned={} paths={paths:?} settings_path={} raw={value}",
+        projects.len(),
+        state.settings.user_path().display()
+    );
+    tracing::info!(
         target: "h1code::recent_projects",
         settings_path = %state.settings.user_path().display(),
         raw_count,
@@ -273,12 +308,20 @@ fn cmd_recent_projects_set(
     let incoming_count = projects.len();
     for project in projects {
         if project.name.trim().is_empty() || project.path.trim().is_empty() {
+            eprintln!(
+                "[recent-debug] set: skip empty name/path name={:?} path={:?}",
+                project.name, project.path
+            );
             continue;
         }
         if clean
             .iter()
             .any(|existing| same_path(&existing.path, &project.path))
         {
+            eprintln!(
+                "[recent-debug] set: skip duplicate path={}",
+                project.path
+            );
             continue;
         }
         clean.push(project);
@@ -287,7 +330,13 @@ fn cmd_recent_projects_set(
         }
     }
     let value = serde_json::to_value(&clean).map_err(to_err)?;
-    tracing::debug!(
+    let paths: Vec<&str> = clean.iter().map(|p| p.path.as_str()).collect();
+    eprintln!(
+        "[recent-debug] set: incoming={incoming_count} saved={} paths={paths:?} settings_path={}",
+        clean.len(),
+        state.settings.user_path().display()
+    );
+    tracing::info!(
         target: "h1code::recent_projects",
         settings_path = %state.settings.user_path().display(),
         incoming_count,
