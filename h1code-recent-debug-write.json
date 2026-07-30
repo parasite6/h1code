@@ -1,0 +1,562 @@
+[
+  {
+    "t": 1785407499531,
+    "label": "before core event listener registration",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0
+    }
+  },
+  {
+    "t": 1785407499560,
+    "label": "after core event listener registration",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0
+    }
+  },
+  {
+    "t": 1785407499562,
+    "label": "load.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "api": "ipc.recentProjectsGet / settings recentProjects"
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "load.backend",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "count": 0,
+      "paths": [],
+      "api": "cmd_recent_projects_get → settings.get_user(recentProjects)"
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "localStorage.read",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "storageKey": "h1code.recentProjects",
+      "raw": "[]",
+      "rawLength": 2
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "localStorage.parsed",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "count": 0,
+      "paths": []
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "load.backendEmpty.fallbackLocal",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "count": 0,
+      "paths": []
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "load.skip",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "reason": "backend-and-local-empty"
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "prune.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "count": 0,
+      "paths": [],
+      "note": "uses ipc.fsList (workspace-jailed)"
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "prune.done",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "before": 0,
+      "after": 0,
+      "keptPaths": [],
+      "dropped": 0
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "load.afterPrune",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "before": 0,
+      "after": 0,
+      "beforePaths": [],
+      "afterPaths": [],
+      "migratedFromLocal": false,
+      "willPersist": false,
+      "persistReason": "none"
+    }
+  },
+  {
+    "t": 1785407499564,
+    "label": "load.done",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "count": 0,
+      "paths": []
+    }
+  },
+  {
+    "t": 1785407499565,
+    "label": "render.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "currentWorkspace": null,
+      "count": 0,
+      "paths": [],
+      "showRecents": false,
+      "skipReason": "empty-list"
+    }
+  },
+  {
+    "t": 1785407499565,
+    "label": "render.applied",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "recentSectionHidden": true,
+      "shortcutsHidden": false,
+      "listChildren": 0,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": null
+    }
+  },
+  {
+    "t": 1785407499599,
+    "label": "startup.workspaceInfo",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "recentPaths": []
+    }
+  },
+  {
+    "t": 1785407499599,
+    "label": "render.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "currentWorkspace": null,
+      "count": 0,
+      "paths": [],
+      "showRecents": false,
+      "skipReason": "empty-list"
+    }
+  },
+  {
+    "t": 1785407499599,
+    "label": "render.applied",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "recentSectionHidden": true,
+      "shortcutsHidden": false,
+      "listChildren": 0,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": null
+    }
+  },
+  {
+    "t": 1785407500500,
+    "label": "repro.phase",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "phase": "write",
+      "targetPath": "/tmp/h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407500502,
+    "label": "repro.write.openWorkspace",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 0,
+      "targetPath": "/tmp/h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407500820,
+    "label": "openWorkspace.addRecent",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 0,
+      "root": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407500820,
+    "label": "add.start",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 0,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "before": []
+    }
+  },
+  {
+    "t": 1785407500820,
+    "label": "add.afterUnshift",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "after": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407500821,
+    "label": "persist.localStorage",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "storageKey": "h1code.recentProjects",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "previousRaw": "[]",
+      "nextRaw": "[{\"name\":\"h1code-recent-repro\",\"path\":\"/tmp/h1code-recent-repro\",\"lastOpened\":1785407500820}]"
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "persist.backend.ok",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "api": "cmd_recent_projects_set → settings.set_user(recentProjects)",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "add.done",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "count": 1
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "render.start",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "currentWorkspace": "/tmp/h1code-recent-repro",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "showRecents": false,
+      "skipReason": "workspace-open"
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "render.applied",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "recentSectionHidden": true,
+      "shortcutsHidden": false,
+      "listChildren": 0,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": "/tmp/h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "openWorkspace.ok",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "root": "/tmp/h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407500838,
+    "label": "repro.write.afterOpen",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "ok": true,
+      "recentPaths": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407501003,
+    "label": "render.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 1,
+      "currentWorkspace": null,
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "showRecents": true,
+      "skipReason": null
+    }
+  },
+  {
+    "t": 1785407501004,
+    "label": "render.applied",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 1,
+      "recentSectionHidden": false,
+      "shortcutsHidden": true,
+      "listChildren": 1,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": null
+    }
+  },
+  {
+    "t": 1785407501004,
+    "label": "repro.write.afterCloseForUi",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 1,
+      "recentPaths": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407501006,
+    "label": "render.start",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 1,
+      "currentWorkspace": null,
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "showRecents": true,
+      "skipReason": null
+    }
+  },
+  {
+    "t": 1785407501006,
+    "label": "render.applied",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "recentCount": 1,
+      "recentSectionHidden": false,
+      "shortcutsHidden": true,
+      "listChildren": 1,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": null
+    }
+  },
+  {
+    "t": 1785407501041,
+    "label": "adoptWorkspaceRoot.addRecent",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "root": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407501041,
+    "label": "add.start",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "before": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407501041,
+    "label": "add.afterUnshift",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "after": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407501041,
+    "label": "persist.localStorage",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "storageKey": "h1code.recentProjects",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "previousRaw": "[{\"name\":\"h1code-recent-repro\",\"path\":\"/tmp/h1code-recent-repro\",\"lastOpened\":1785407500820}]",
+      "nextRaw": "[{\"name\":\"h1code-recent-repro\",\"path\":\"/tmp/h1code-recent-repro\",\"lastOpened\":1785407501041}]"
+    }
+  },
+  {
+    "t": 1785407501043,
+    "label": "persist.backend.ok",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "api": "cmd_recent_projects_set → settings.set_user(recentProjects)",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ]
+    }
+  },
+  {
+    "t": 1785407501043,
+    "label": "add.done",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "path": "/tmp/h1code-recent-repro",
+      "name": "h1code-recent-repro",
+      "count": 1
+    }
+  },
+  {
+    "t": 1785407501043,
+    "label": "render.start",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "currentWorkspace": "/tmp/h1code-recent-repro",
+      "count": 1,
+      "paths": [
+        "/tmp/h1code-recent-repro"
+      ],
+      "showRecents": false,
+      "skipReason": "workspace-open"
+    }
+  },
+  {
+    "t": 1785407501043,
+    "label": "render.applied",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "recentSectionHidden": true,
+      "shortcutsHidden": false,
+      "listChildren": 1,
+      "editorEmptyStateHidden": false,
+      "editorHostHidden": true,
+      "activeTab": null,
+      "currentWorkspace": "/tmp/h1code-recent-repro"
+    }
+  },
+  {
+    "t": 1785407501043,
+    "label": "adoptWorkspaceRoot.ok",
+    "payload": {
+      "workspace": "/tmp/h1code-recent-repro",
+      "scratch": null,
+      "recentCount": 1,
+      "root": "/tmp/h1code-recent-repro"
+    }
+  }
+]

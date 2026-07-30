@@ -1,0 +1,493 @@
+[
+  {
+    "t": 1785405851027,
+    "label": "repro:begin",
+    "payload": {
+      "workspace": null,
+      "scratch": null,
+      "activeTab": null,
+      "activeTemporary": null,
+      "activeDirty": null,
+      "activeKind": null,
+      "forcedParent": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851031,
+    "label": "repro:scratch-created",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 0
+      },
+      "activeTab": null,
+      "activeTemporary": null,
+      "activeDirty": null,
+      "activeKind": null
+    }
+  },
+  {
+    "t": 1785405851078,
+    "label": "repro:file-created",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "filePath": "scratch:1/repro_run.py"
+    }
+  },
+  {
+    "t": 1785405851078,
+    "label": "repro:run-1",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text"
+    }
+  },
+  {
+    "t": 1785405851079,
+    "label": "runFile:start",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "path": "scratch:1/repro_run.py",
+      "temporary": true,
+      "hasWorkspace": false,
+      "hasScratch": true,
+      "isScratchFile": true
+    }
+  },
+  {
+    "t": 1785405851079,
+    "label": "runFile:needs-save-or-workspace",
+    "payload": {
+      "workspace": null,
+      "scratch": "scratch:1",
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "reason": "temporary-path",
+      "path": "scratch:1/repro_run.py"
+    }
+  },
+  {
+    "t": 1785405851080,
+    "label": "saveActiveWithDialog:start",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "hasActive": true,
+      "isScratchFile": true,
+      "branchHint": "scratch-file"
+    }
+  },
+  {
+    "t": 1785405851080,
+    "label": "saveActiveWithDialog:route",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "route": "saveScratchWorkspace(active-scratch-file)"
+    }
+  },
+  {
+    "t": 1785405851080,
+    "label": "saveScratchWorkspace:start",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text"
+    }
+  },
+  {
+    "t": 1785405851081,
+    "label": "saveScratchWorkspace:pre-dialog",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "scratchName": "Scratch Workspace",
+      "scratchRoot": "scratch:1",
+      "childCount": 1,
+      "activeRelativePath": "repro_run.py",
+      "forcedDest": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851081,
+    "label": "saveScratchWorkspace:using-forced-dest",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "picked": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851081,
+    "label": "saveScratchWorkspace:will-write",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "picked": "/tmp/h1code-repro-real",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace",
+      "workspaceBefore": null,
+      "scratchStillSet": true
+    }
+  },
+  {
+    "t": 1785405851081,
+    "label": "saveScratchWorkspace:fsCreateDir",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:fail",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "error": "workspace not open",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace",
+      "scratchStillSet": true
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "runFile:save-aborted",
+    "payload": {
+      "workspace": null,
+      "scratch": "scratch:1",
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "activeAfter": "scratch:1/repro_run.py"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "repro:after-run-1",
+    "payload": {
+      "workspace": null,
+      "scratch": "scratch:1",
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "active": "scratch:1/repro_run.py"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "repro:save-2",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveActiveWithDialog:start",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "hasActive": true,
+      "isScratchFile": true,
+      "branchHint": "scratch-file"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveActiveWithDialog:route",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "route": "saveScratchWorkspace(active-scratch-file)"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:start",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:pre-dialog",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "scratchName": "Scratch Workspace",
+      "scratchRoot": "scratch:1",
+      "childCount": 1,
+      "activeRelativePath": "repro_run.py",
+      "forcedDest": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:using-forced-dest",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "picked": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:will-write",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "picked": "/tmp/h1code-repro-real",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace",
+      "workspaceBefore": null,
+      "scratchStillSet": true
+    }
+  },
+  {
+    "t": 1785405851102,
+    "label": "saveScratchWorkspace:fsCreateDir",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace"
+    }
+  },
+  {
+    "t": 1785405851104,
+    "label": "saveScratchWorkspace:fail",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "error": "workspace not open",
+      "destRoot": "/tmp/h1code-repro-real/Scratch Workspace",
+      "scratchStillSet": true
+    }
+  },
+  {
+    "t": 1785405851104,
+    "label": "repro:after-save-2",
+    "payload": {
+      "workspace": null,
+      "scratch": "scratch:1",
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "save2": false,
+      "active": "scratch:1/repro_run.py"
+    }
+  },
+  {
+    "t": 1785405851104,
+    "label": "repro:done",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text"
+    }
+  },
+  {
+    "t": 1785405851105,
+    "label": "adoptWorkspaceRoot",
+    "payload": {
+      "workspace": null,
+      "scratch": {
+        "root": "scratch:1",
+        "name": "Scratch Workspace",
+        "children": 1
+      },
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "dir": "/tmp/h1code-repro-real"
+    }
+  },
+  {
+    "t": 1785405851146,
+    "label": "adoptWorkspaceRoot:ok",
+    "payload": {
+      "workspace": "/tmp/h1code-repro-real",
+      "scratch": null,
+      "activeTab": "scratch:1/repro_run.py",
+      "activeTemporary": true,
+      "activeDirty": true,
+      "activeKind": "text",
+      "root": "/tmp/h1code-repro-real"
+    }
+  }
+]
