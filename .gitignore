@@ -434,3 +434,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/.h1code/
+/target-diag/
+./h1code-*.json
