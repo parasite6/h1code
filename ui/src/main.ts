@@ -2,12 +2,11 @@
 // every notification is a backend event.
 
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { documentDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import { ipc, onCoreEvent, type CoreDiagnostic, type CoreEvent, type RecentProject, type WorkspaceInfo } from "./ipc";
-import { mountEditor } from "./editor";
+import { mountEditor, destroyEditor } from "./editor";
 import { mountTabs, isTemporaryPath, type Tab } from "./tabs";
 import { mountExplorer, type ScratchEntry, type ScratchFile, type ScratchFolder } from "./explorer";
 import { createFileSync } from "./fileSync";
@@ -191,14 +190,20 @@ async function bootstrap() {
   }
   updateWelcomeZoomTier();
   window.addEventListener("ide:zoomchange", updateWelcomeZoomTier);
+  // WebView zoom changes layout metrics; force CodeMirror to remeasure so the
+  // drawn caret doesn't drift relative to a stale native caret position.
+  window.addEventListener("ide:zoomchange", () => {
+    editor.view.requestMeasure();
+  });
 
   let currentWorkspace: WorkspaceInfo | null = null;
   let recentProjects: RecentProject[] = [];
   let scratchWorkspace: TempWorkspace | null = null;
   let scratchWorkspaceCounter = 0;
-  /** Active frictionless-run snapshot at ~/Documents/run_temp_, if any. */
+  /** Active frictionless-run snapshot under `<workspace>/.h1code/run_temp_`, if any. */
   let activeRunTempDir: string | null = null;
   const RUN_TEMP_DIR_NAME = "run_temp_";
+  const H1CODE_DIR_NAME = ".h1code";
   /** Skip sending buffers larger than this (chars) to Pyright — huge docs stall the LSP. */
   const PYRIGHT_MAX_DOC_CHARS = 1_000_000;
 
@@ -338,8 +343,11 @@ async function bootstrap() {
   }
 
   async function resolveRunTempDir(): Promise<string> {
-    const docs = await documentDir();
-    return joinPath(docs, RUN_TEMP_DIR_NAME);
+    // Must stay inside the open workspace so FS / python-run jails allow it.
+    if (!currentWorkspace) {
+      throw new Error("No workspace open");
+    }
+    return joinPath(joinPath(currentWorkspace.root, H1CODE_DIR_NAME), RUN_TEMP_DIR_NAME);
   }
 
   async function stopActiveRunner() {
@@ -382,7 +390,7 @@ async function bootstrap() {
   }
 
   /**
-   * Recursively delete ~/Documents/run_temp_. Stops an active *run* PTY first so
+   * Recursively delete `<workspace>/.h1code/run_temp_`. Stops an active *run* PTY first so
    * file locks from a just-finished process don't block deletion; does not kill
    * an interactive shell. Backend remove also retries with backoff.
    */
@@ -417,9 +425,9 @@ async function bootstrap() {
   }
 
   /**
-   * Snapshot every open editor buffer into absolute `~/Documents/run_temp_/`
+   * Snapshot every open editor buffer into `<workspace>/.h1code/run_temp_/`
    * and return the absolute path of `runPath` inside that folder (plus the folder).
-   * Does not write to the user's real project files.
+   * Does not write to the user's real project source files.
    */
   async function prepareRunTempSnapshot(runPath: string): Promise<{ runFile: string; runDir: string } | null> {
     // Flush the active editor into the tab model before snapshotting.
@@ -1215,10 +1223,73 @@ async function bootstrap() {
     }
   };
 
+  function saveDebug(label: string, extra?: Record<string, unknown>) {
+    try {
+      if (localStorage.getItem("h1code.debug.save") !== "1") return;
+    } catch {
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.log("[save-debug]", label, {
+      workspace: currentWorkspace?.root ?? null,
+      activeTab: tabs.active()?.path ?? null,
+      activeTemporary: tabs.active() ? isTemporaryPath(tabs.active()!.path) : null,
+      ...extra,
+    });
+  }
+
+  /**
+   * Open `dir` as the workspace without wiping existing tabs.
+   * Used when a standalone Save/Open picks a path and we need a jail root
+   * before the FS write/read — unlike openWorkspace(), which closes all tabs.
+   */
+  async function adoptWorkspaceRoot(dir: string): Promise<boolean> {
+    saveDebug("adoptWorkspaceRoot", { dir });
+    try {
+      const info = await ipc.workspaceOpen(dir);
+      scratchWorkspace = null;
+      explorer.clearScratchRoot();
+      currentWorkspace = info;
+      updateWorkspaceUi(info);
+      await explorer.setRoot(info.root);
+      search.setWorkspaceRoot(info.root);
+      await addToRecentProjects(info.root, info.name);
+      fileSync.startCheckup();
+      renderEmptyState();
+      saveDebug("adoptWorkspaceRoot:ok", { root: info.root });
+      return true;
+    } catch (e) {
+      saveDebug("adoptWorkspaceRoot:fail", { error: String(e) });
+      terminal.log(`Failed to open workspace: ${String(e)}`, { newPrompt: true });
+      return false;
+    }
+  }
+
+  /** Ensure `filePath` lies under an open workspace root before jailed FS ops. */
+  async function ensureWorkspaceForFile(filePath: string): Promise<boolean> {
+    if (currentWorkspace && pathBelongsToWorkspace(filePath, currentWorkspace.root)) {
+      return true;
+    }
+    if (currentWorkspace) {
+      terminal.log(
+        `Path is outside the open workspace (${currentWorkspace.root}). Open that folder or save inside it.`,
+        { newPrompt: true }
+      );
+      return false;
+    }
+    const parent = dirname(filePath);
+    if (!parent || parent === ".") {
+      terminal.log("Could not determine a folder for this file.", { newPrompt: true });
+      return false;
+    }
+    return adoptWorkspaceRoot(parent);
+  }
+
   // Save current tab. Routes untitled tabs through the save() dialog; converts
   // them into real on-disk files on success. Returns true if persisted.
   async function saveActiveWithDialog(): Promise<boolean> {
     const active = tabs.active();
+    saveDebug("saveActiveWithDialog:start");
     if (!active && scratchWorkspace) {
       return saveScratchWorkspace();
     }
@@ -1227,8 +1298,13 @@ async function bootstrap() {
       return saveScratchWorkspace();
     }
     if (!isTemporaryPath(active.path)) {
-      await tabs.saveActive(editor.getDoc());
-      return true;
+      try {
+        await tabs.saveActive(editor.getDoc());
+        return true;
+      } catch (e) {
+        terminal.log(`save failed: ${String(e)}`);
+        return false;
+      }
     }
     const defaultPath = currentWorkspace
       ? joinPath(currentWorkspace.root, active.name)
@@ -1240,17 +1316,33 @@ async function bootstrap() {
         { name: "All Files", extensions: ["*"] },
       ],
     });
-    if (!picked) return false;
+    if (!picked) {
+      saveDebug("saveActiveWithDialog:dialog-cancelled");
+      return false;
+    }
     const contents = editor.getDoc();
+    // FS IPC is workspace-jailed: adopt the save folder as the workspace root
+    // before writing so standalone "New File → Save" works without a prior Open Folder.
+    if (!(await ensureWorkspaceForFile(picked))) {
+      saveDebug("saveActiveWithDialog:ensure-workspace-fail", { picked });
+      return false;
+    }
+    saveDebug("saveActiveWithDialog:relocate", { from: active.path, to: picked });
     try {
       await tabs.relocate(active.path, picked, contents);
     } catch (e) {
+      saveDebug("saveActiveWithDialog:relocate-fail", { error: String(e) });
       terminal.log(`save failed: ${String(e)}`);
       return false;
     }
+    saveDebug("saveActiveWithDialog:ok", {
+      activeAfter: tabs.active()?.path ?? null,
+      workspace: currentWorkspace?.root ?? null,
+    });
     if (/\.pyi?$/i.test(picked)) {
       ipc.docDidOpen(picked, contents).catch(() => {});
     }
+    await fileSync.noteBaseline(picked).catch(() => {});
     persistWorkspaceTabState().catch(() => {});
     return true;
   }
@@ -1280,6 +1372,7 @@ async function bootstrap() {
     if (!picked) return false;
 
     const contents = editor.getDoc();
+    if (!(await ensureWorkspaceForFile(picked))) return false;
     try {
       await tabs.relocate(active.path, picked, contents);
     } catch (e) {
@@ -1367,6 +1460,7 @@ async function bootstrap() {
   }
 
   async function openFileWithDialog() {
+    saveDebug("openFileWithDialog:start");
     const picked = await openDialog({
       directory: false,
       multiple: false,
@@ -1375,10 +1469,20 @@ async function bootstrap() {
         { name: "All Files", extensions: ["*"] },
       ],
     });
-    if (!picked || Array.isArray(picked)) return;
+    if (!picked || Array.isArray(picked)) {
+      saveDebug("openFileWithDialog:cancelled");
+      return;
+    }
+    saveDebug("openFileWithDialog:picked", { picked });
+    if (!(await ensureWorkspaceForFile(picked))) {
+      saveDebug("openFileWithDialog:ensure-workspace-fail");
+      return;
+    }
     try {
       await tabs.open(picked);
+      saveDebug("openFileWithDialog:ok", { activeAfter: tabs.active()?.path ?? null });
     } catch (e) {
+      saveDebug("openFileWithDialog:fail", { error: String(e) });
       terminal.log(`open file failed: ${String(e)}`);
     }
   }
@@ -1800,15 +1904,57 @@ async function bootstrap() {
     // Remember prior mode before snapshot/cleanup so a restored shell isn't
     // mis-classified after prepareRunTempSnapshot touches PTYs.
     restoreShellAfterRun = activePtyKind === "shell";
+    saveDebug("runFile:start", { path, temporary: isTemporaryPath(path) });
 
-    // Frictionless run: snapshot open buffers into ~/Documents/run_temp_/
-    // and execute from there — no manual save required.
-    const snapshot = await prepareRunTempSnapshot(path);
-    if (!snapshot) {
+    const restoreShellIfNeeded = async () => {
       if (restoreShellAfterRun && activePtyKind !== "shell") {
         restoreShellAfterRun = false;
         await openShell();
       }
+    };
+
+    // Unsaved / in-memory tabs must hit disk (and a workspace) before Run —
+    // the jailed run_temp snapshot lives under the open workspace.
+    if (isTemporaryPath(path) || !currentWorkspace) {
+      saveDebug("runFile:needs-save-or-workspace", {
+        reason: isTemporaryPath(path) ? "temporary-path" : "no-workspace",
+      });
+      terminal.log("Save file first.", { newPrompt: true });
+      const saved = await saveActiveWithDialog();
+      if (!saved) {
+        saveDebug("runFile:save-aborted");
+        await restoreShellIfNeeded();
+        return;
+      }
+      const savedActive = tabs.active();
+      if (!savedActive || isTemporaryPath(savedActive.path)) {
+        saveDebug("runFile:still-temporary-after-save", {
+          activeAfter: savedActive?.path ?? null,
+        });
+        await restoreShellIfNeeded();
+        return;
+      }
+      path = savedActive.path;
+      if (!currentWorkspace) {
+        saveDebug("runFile:still-no-workspace-after-save");
+        terminal.log("Open a workspace folder to run files.", { newPrompt: true });
+        await restoreShellIfNeeded();
+        return;
+      }
+    }
+
+    // Frictionless run: snapshot open buffers into workspace/.h1code/run_temp_/
+    // so dirty buffers run without overwriting project files.
+    let snapshot: { runFile: string; runDir: string } | null;
+    try {
+      snapshot = await prepareRunTempSnapshot(path);
+    } catch (e) {
+      terminal.log(`run failed: ${String(e)}`, { newPrompt: true });
+      await restoreShellIfNeeded();
+      return;
+    }
+    if (!snapshot) {
+      await restoreShellIfNeeded();
       return;
     }
 
@@ -1828,10 +1974,7 @@ async function bootstrap() {
       rememberRunTarget(currentWorkspace, path);
     } catch (e) {
       terminal.log(`run failed: ${String(e)}`);
-      if (restoreShellAfterRun) {
-        restoreShellAfterRun = false;
-        await openShell();
-      }
+      await restoreShellIfNeeded();
     }
   }
 
@@ -2192,6 +2335,15 @@ async function bootstrap() {
   }).catch((e) => {
     console.error("Failed to query initial workspace", e);
     renderEmptyState();
+  });
+}
+
+// Vite HMR: destroy the singleton EditorView before this module re-evaluates so
+// keymaps / updateListeners never stack across hot reloads. Prefer a full
+// `tauri dev` restart when validating editor input behavior.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    destroyEditor();
   });
 }
 

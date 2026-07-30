@@ -1459,6 +1459,9 @@ body[data-welcome-zoom-tier="very-small"] .empty-action-btn {
 #editor.hidden { display: none; }
 #editor .cm-editor { height: 100%; }
 #editor .cm-editor.cm-focused { outline: none; }
+/* Native caret must stay hidden — drawSelection owns the visible cursor.
+   WebView zoom otherwise leaves a frozen ghost caret beside the live one. */
+#editor .cm-content { caret-color: transparent; }
 #editor .cm-scroller { font-family: var(--font-mono); font-size: 12px; }
 
 /* Drag Resizer System Styling */

@@ -57,16 +57,7 @@ impl PreviewServer {
 
     /// Absolute `file` path → `http://127.0.0.1:<port>/<rel>` URL.
     pub fn url_for_file(&self, file: &Path) -> IdeResult<String> {
-        let file = file
-            .canonicalize()
-            .map_err(|e| IdeError::InvalidPath(format!("{}: {e}", file.display())))?;
-        if !file.starts_with(&self.root) {
-            return Err(IdeError::InvalidPath(format!(
-                "{} is outside preview root {}",
-                file.display(),
-                self.root.display()
-            )));
-        }
+        let file = crate::path_jail::ensure_within_root(&self.root, file)?;
         let rel = file
             .strip_prefix(&self.root)
             .map_err(|_| IdeError::InvalidPath(file.display().to_string()))?;
@@ -144,12 +135,11 @@ fn handle_client(mut stream: TcpStream, root: &Path) -> std::io::Result<()> {
     }
 
     let candidate = root.join(rel);
-    let Ok(canon) = candidate.canonicalize() else {
-        return respond_status(&mut stream, 404, "text/plain; charset=utf-8", b"Not Found");
-    };
-    if !canon.starts_with(root) {
+    // Use path_jail (not canonicalize+starts_with) so a workspace-internal
+    // symlink that resolves outside the root is refused.
+    let Ok(canon) = crate::path_jail::ensure_within_root(root, &candidate) else {
         return respond_status(&mut stream, 403, "text/plain; charset=utf-8", b"Forbidden");
-    }
+    };
     if !canon.is_file() {
         return respond_status(&mut stream, 404, "text/plain; charset=utf-8", b"Not Found");
     }
@@ -186,8 +176,10 @@ fn respond_status(
         404 => "Not Found",
         _ => "Error",
     };
+    // No Access-Control-Allow-Origin: clients load via iframe/Chrome navigation,
+    // not cross-origin fetch. A wildcard would let any page read workspace files.
     let header = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(header.as_bytes())?;
@@ -296,6 +288,10 @@ mod tests {
         stream.read_to_string(&mut resp).unwrap();
         assert!(resp.contains("200 OK"));
         assert!(resp.contains("<h1>hi</h1>"));
+        assert!(
+            !resp.to_ascii_lowercase().contains("access-control-allow-origin"),
+            "preview must not emit wildcard CORS (cross-origin fetch of workspace files)"
+        );
 
         let mut stream =
             TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect preview");
@@ -309,6 +305,28 @@ mod tests {
         let url = server.url_for_file(&root.join("style.css")).unwrap();
         assert!(url.ends_with("/style.css"));
         assert!(url.starts_with(&format!("http://127.0.0.1:{port}/")));
+    }
+
+    #[test]
+    fn responses_omit_cors_allow_origin() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        std::fs::write(root.join("index.html"), b"INDEX").unwrap();
+        let server = PreviewServer::start(root).unwrap();
+        let port = server.port();
+
+        let mut stream =
+            TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect preview");
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        let mut resp = String::new();
+        stream.read_to_string(&mut resp).unwrap();
+        assert!(resp.contains("INDEX"));
+        assert!(
+            !resp.to_ascii_lowercase().contains("access-control-allow-origin"),
+            "expected no Access-Control-Allow-Origin header, got:\n{resp}"
+        );
     }
 
     #[test]
@@ -327,5 +345,38 @@ mod tests {
         let mut resp = String::new();
         stream.read_to_string(&mut resp).unwrap();
         assert!(resp.contains("INDEX"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlink_that_resolves_outside_root() {
+        let outer = tempdir().unwrap();
+        let root = outer.path().join("workspace");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("index.html"), b"ok").unwrap();
+
+        let secret = outer.path().join("secret.txt");
+        std::fs::write(&secret, b"top-secret").unwrap();
+        let link = root.join("escape.txt");
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+        let server = PreviewServer::start(root).unwrap();
+        let port = server.port();
+
+        let mut stream =
+            TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect preview");
+        stream
+            .write_all(b"GET /escape.txt HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        let mut resp = String::new();
+        stream.read_to_string(&mut resp).unwrap();
+        assert!(
+            resp.contains("403"),
+            "symlink-out must be forbidden, got:\n{resp}"
+        );
+        assert!(
+            !resp.contains("top-secret"),
+            "must not leak symlink target body"
+        );
     }
 }

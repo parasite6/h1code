@@ -16,6 +16,7 @@ use tracing_subscriber::EnvFilter;
 
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
 use ide_core::fs_service::{DirEntry, FileStat, FsService};
+use ide_core::path_jail;
 use ide_core::preview_settings::PreviewEngine;
 use ide_core::process::ProcessRunner;
 use ide_core::pty::{PtyManager, PtySpec};
@@ -428,13 +429,20 @@ fn same_path(a: &str, b: &str) -> bool {
 
 // ---------- FS ----------
 
+/// Jail an FS IPC path under the open workspace root before any disk op.
+fn jail_fs_path(state: &State<'_, AppState>, path: &str) -> Result<PathBuf, String> {
+    let root = state.workspace.root().map_err(to_err)?;
+    path_jail::ensure_within_root(&root, Path::new(path)).map_err(to_err)
+}
+
 #[tauri::command(async)]
 fn cmd_fs_list(state: State<'_, AppState>, path: String) -> Result<Vec<DirEntry>, String> {
     let start = std::time::Instant::now();
-    let res = state.fs.list_dir(Path::new(&path)).map_err(to_err);
+    let path = jail_fs_path(&state, &path)?;
+    let res = state.fs.list_dir(&path).map_err(to_err);
     tracing::info!(
         target: "h1code::fs",
-        path = %path,
+        path = %path.display(),
         ok = res.is_ok(),
         elapsed_ms = start.elapsed().as_millis() as u64,
         "cmd_fs_list"
@@ -445,10 +453,11 @@ fn cmd_fs_list(state: State<'_, AppState>, path: String) -> Result<Vec<DirEntry>
 #[tauri::command(async)]
 fn cmd_fs_read(state: State<'_, AppState>, path: String) -> Result<String, String> {
     let start = std::time::Instant::now();
-    let res = state.fs.read(Path::new(&path)).map_err(to_err);
+    let path = jail_fs_path(&state, &path)?;
+    let res = state.fs.read(&path).map_err(to_err);
     tracing::info!(
         target: "h1code::fs",
-        path = %path,
+        path = %path.display(),
         ok = res.is_ok(),
         bytes = res.as_ref().map(|s| s.len()).unwrap_or(0),
         elapsed_ms = start.elapsed().as_millis() as u64,
@@ -460,10 +469,11 @@ fn cmd_fs_read(state: State<'_, AppState>, path: String) -> Result<String, Strin
 #[tauri::command(async)]
 fn cmd_fs_read_lossy(state: State<'_, AppState>, path: String) -> Result<String, String> {
     let start = std::time::Instant::now();
-    let res = state.fs.read_lossy(Path::new(&path)).map_err(to_err);
+    let path = jail_fs_path(&state, &path)?;
+    let res = state.fs.read_lossy(&path).map_err(to_err);
     tracing::info!(
         target: "h1code::fs",
-        path = %path,
+        path = %path.display(),
         ok = res.is_ok(),
         bytes = res.as_ref().map(|s| s.len()).unwrap_or(0),
         elapsed_ms = start.elapsed().as_millis() as u64,
@@ -474,35 +484,39 @@ fn cmd_fs_read_lossy(state: State<'_, AppState>, path: String) -> Result<String,
 
 #[tauri::command(async)]
 fn cmd_fs_write(state: State<'_, AppState>, path: String, contents: String) -> Result<(), String> {
-    state.fs.write(Path::new(&path), &contents).map_err(to_err)
+    let path = jail_fs_path(&state, &path)?;
+    state.fs.write(&path, &contents).map_err(to_err)
 }
 
 #[tauri::command(async)]
 fn cmd_fs_create_file(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    state.fs.create_file(Path::new(&path)).map_err(to_err)
+    let path = jail_fs_path(&state, &path)?;
+    state.fs.create_file(&path).map_err(to_err)
 }
 
 #[tauri::command(async)]
 fn cmd_fs_create_dir(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    state.fs.create_dir(Path::new(&path)).map_err(to_err)
+    let path = jail_fs_path(&state, &path)?;
+    state.fs.create_dir(&path).map_err(to_err)
 }
 
 #[tauri::command(async)]
 fn cmd_fs_rename(state: State<'_, AppState>, from: String, to: String) -> Result<(), String> {
-    state
-        .fs
-        .rename(Path::new(&from), Path::new(&to))
-        .map_err(to_err)
+    let from = jail_fs_path(&state, &from)?;
+    let to = jail_fs_path(&state, &to)?;
+    state.fs.rename(&from, &to).map_err(to_err)
 }
 
 #[tauri::command(async)]
 fn cmd_fs_remove(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    state.fs.remove(Path::new(&path)).map_err(to_err)
+    let path = jail_fs_path(&state, &path)?;
+    state.fs.remove(&path).map_err(to_err)
 }
 
 #[tauri::command(async)]
 fn cmd_fs_stat(state: State<'_, AppState>, path: String) -> Result<FileStat, String> {
-    Ok(state.fs.stat(Path::new(&path)))
+    let path = jail_fs_path(&state, &path)?;
+    Ok(state.fs.stat(&path))
 }
 
 // ---------- Search ----------
@@ -566,21 +580,19 @@ fn cmd_python_run(
     state: State<'_, AppState>,
     payload: PtyRunArgs,
 ) -> Result<PythonRunResult, String> {
-    // Prefer the open workspace for interpreter detection (venv/.python), but
-    // allow frictionless runs from ~/Documents/run_temp_ without a workspace.
-    let workspace_root = state.workspace.current().map(|w| w.root);
-    let detect_root = workspace_root
-        .clone()
-        .or_else(|| payload.cwd.clone())
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let env = python_env::detect(&detect_root).map_err(to_err)?;
-    let cwd = payload
-        .cwd
-        .or(workspace_root)
-        .unwrap_or_else(|| detect_root.clone());
+    let workspace_root = state.workspace.root().map_err(to_err)?;
+    // Same containment as FS IPC — reject scripts outside the open workspace
+    // (XSS + fs_write would otherwise be an easy RCE path).
+    let file = path_jail::ensure_within_root(&workspace_root, Path::new(&payload.file))
+        .map_err(to_err)?;
+    let cwd = match &payload.cwd {
+        Some(c) => path_jail::ensure_within_root(&workspace_root, c).map_err(to_err)?,
+        None => workspace_root.clone(),
+    };
+    let env = python_env::detect(&workspace_root).map_err(to_err)?;
     // `-u` keeps stdout/stderr unbuffered so prompts appear immediately even
     // inside ConPTY's chunking. Python still sees a real TTY (isatty=true).
-    let mut args = vec!["-u".to_string(), payload.file.clone()];
+    let mut args = vec!["-u".to_string(), file.to_string_lossy().into_owned()];
     args.extend(payload.args);
     let id = state
         .pty

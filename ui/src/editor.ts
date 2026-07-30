@@ -5,10 +5,39 @@
 //   setDiagnostics(items) -> dispatches @codemirror/lint's setDiagnostics
 //   effect with positions converted from (line, character) -> doc offsets.
 
-import { EditorState, Compartment, EditorSelection, Annotation } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import {
+  EditorState,
+  Compartment,
+  EditorSelection,
+  Annotation,
+  Text,
+  countColumn,
+} from "@codemirror/state";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  drawSelection,
+  dropCursor,
+  type KeyBinding,
+  type Command,
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentMore,
+  indentLess,
+  insertNewlineAndIndent,
+} from "@codemirror/commands";
 import { python } from "@codemirror/lang-python";
+import {
+  indentUnit,
+  getIndentation,
+  IndentContext,
+  indentString,
+} from "@codemirror/language";
 import {
   linter,
   lintGutter,
@@ -32,6 +61,8 @@ export interface EditorBinding {
   getDoc(): string;
   focus(): void;
   view: EditorView;
+  /** Tear down the view (HMR / remount). Safe to call more than once. */
+  destroy(): void;
   /** Push the diagnostic set for the currently-displayed doc. */
   setDiagnostics(items: DiagnosticItem[]): void;
   /** Move caret to a 1-based (line, col); col is 1-based to match Problems UI. */
@@ -47,7 +78,119 @@ const ProgrammaticDocSet = Annotation.define<boolean>();
 // virtualization handles plain text of this size comfortably.
 const LARGE_FILE_PLAIN_THRESHOLD = 1_000_000;
 
+/** Singleton so Vite HMR / remount cannot leave two live EditorViews. */
+let mountedView: EditorView | null = null;
+
+function destroyMountedView() {
+  if (mountedView) {
+    mountedView.destroy();
+    mountedView = null;
+  }
+}
+
+/** Destroy the live editor, if any. Used by Vite HMR dispose. */
+export function destroyEditor() {
+  destroyMountedView();
+}
+
+/**
+ * Tab: insert indent-unit whitespace at the cursor when there is no selection
+ * and the caret is not at column 0. Whole-line indent (indentMore) only when
+ * there is a selection or the caret is at the start of the line.
+ *
+ * Stock `indentWithTab` always calls indentMore — that is bug (a).
+ */
+const insertOrIndentTab: Command = (view) => {
+  const { state } = view;
+  if (state.readOnly) return false;
+  const indentWholeLine = state.selection.ranges.some((range) => {
+    if (!range.empty) return true;
+    return range.head === state.doc.lineAt(range.head).from;
+  });
+  if (indentWholeLine) return indentMore(view);
+  const unit = state.facet(indentUnit);
+  view.dispatch(
+    state.update(state.replaceSelection(unit), {
+      scrollIntoView: true,
+      userEvent: "input",
+    })
+  );
+  return true;
+};
+
+/**
+ * Enter: like insertNewlineAndIndent, but when splitting mid-line do not let
+ * a syntax-indent of 0 strip leading whitespace that already belongs to the
+ * text moving onto the new line (bug (b) after merge / mid-line split).
+ */
+const insertNewlinePreserveLineIndent: Command = (view) => {
+  const { state } = view;
+  if (state.readOnly) return false;
+
+  // Bracket-pair explode stays with the stock command.
+  for (const range of state.selection.ranges) {
+    if (range.empty && looksLikeBracketPair(state, range.head)) {
+      return insertNewlineAndIndent(view);
+    }
+  }
+
+  const changes = state.changeByRange((range) => {
+    let { from, to } = range;
+    const line = state.doc.lineAt(from);
+    const cx = new IndentContext(state, { simulateBreak: from });
+    let indent = getIndentation(cx, from);
+    if (indent == null) {
+      indent = countColumn(/^\s*/.exec(line.text)![0], state.tabSize);
+    }
+
+    // Text after the caret may already carry indent (e.g. after merging an
+    // indented block line upward). Preserve at least that many columns.
+    const after = line.text.slice(from - line.from);
+    const afterLead = /^\s*/.exec(after)![0];
+    indent = Math.max(indent, countColumn(afterLead, state.tabSize));
+
+    let end = to;
+    while (end < line.to && /\s/.test(line.text[end - line.from]!)) end++;
+
+    let start = from;
+    if (
+      from > line.from &&
+      from < line.from + 100 &&
+      !/\S/.test(line.text.slice(0, from - line.from))
+    ) {
+      start = line.from;
+    }
+
+    const insertLines = ["", indentString(state, indent)];
+    return {
+      changes: { from: start, to: end, insert: Text.of(insertLines) },
+      range: EditorSelection.cursor(start + 1 + insertLines[1]!.length),
+    };
+  });
+
+  view.dispatch(
+    state.update(changes, { scrollIntoView: true, userEvent: "input" })
+  );
+  return true;
+};
+
+function looksLikeBracketPair(state: EditorState, pos: number): boolean {
+  if (pos <= 0 || pos >= state.doc.length) return false;
+  return /\(\)|\[\]|\{\}/.test(state.sliceDoc(pos - 1, pos + 1));
+}
+
+/** Keymap that overrides stock Tab / Enter. Must be registered *after* defaultKeymap. */
+const indentKeymap: KeyBinding[] = [
+  { key: "Tab", run: insertOrIndentTab, shift: indentLess },
+  { key: "Enter", run: insertNewlinePreserveLineIndent, shift: insertNewlinePreserveLineIndent },
+];
+
 export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBinding {
+  // Hot reload re-runs bootstrap without a full document reload; destroy any
+  // prior view so keymaps/updateListeners are never double-registered.
+  destroyMountedView();
+  parent.replaceChildren();
+
   const language = new Compartment();
   const view = new EditorView({
     parent,
@@ -57,7 +200,15 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
         lineNumbers(),
         highlightActiveLine(),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        // Python convention: 4-space indent unit (affects Tab insert + auto-indent).
+        indentUnit.of("    "),
+        // Draw the caret ourselves and hide the native one. WebView zoom
+        // otherwise leaves a frozen native caret beside the live one.
+        drawSelection(),
+        dropCursor(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // Later keymap wins over defaultKeymap's Tab/Enter bindings.
+        keymap.of(indentKeymap),
         language.of(python()),
         // Install the lint state field with a no-op source. We push the actual
         // diagnostics imperatively via setDiagnostics().
@@ -66,7 +217,12 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
         EditorView.theme(
           {
             "&": { backgroundColor: "#1e1e1e", color: "#d4d4d4", height: "100%" },
-            ".cm-content": { caretColor: "#aeafad" },
+            // Hide the browser caret; only .cm-cursor from drawSelection is shown.
+            ".cm-content": { caretColor: "transparent" },
+            ".cm-cursor, .cm-dropCursor": {
+              borderLeftColor: "#aeafad",
+              borderLeftWidth: "1.2px",
+            },
             ".cm-gutters": {
               backgroundColor: "#1e1e1e",
               color: "#5a5a5a",
@@ -93,6 +249,7 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
       ],
     }),
   });
+  mountedView = view;
 
   function clampLineChar(line: number, character: number): number {
     const doc = view.state.doc;
@@ -104,6 +261,13 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
 
   return {
     view,
+    destroy() {
+      if (mountedView === view) {
+        destroyMountedView();
+      } else {
+        view.destroy();
+      }
+    },
     setDoc(text, filePath) {
       void filePath;
       // Large files: drop the Lezer language parser. Running Python (Lezer)

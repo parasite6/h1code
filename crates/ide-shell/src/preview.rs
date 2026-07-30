@@ -172,12 +172,29 @@ pub fn set_is_popped_out(
 
 pub fn spawn_chrome(preview: &PreviewHandle, url: &str) -> Result<(), String> {
     let mut state = preview.lock();
+    let base_url = state
+        .server
+        .as_ref()
+        .map(|s| s.base_url())
+        .ok_or_else(|| "preview server not running".to_string())?;
+    if !url_is_under_preview_base(&base_url, url) {
+        return Err(format!(
+            "url must start with the current preview base URL ({base_url})"
+        ));
+    }
     kill_chrome_locked(&mut state);
     let child = spawn_chrome_process(url)?;
     state.chrome = Some(child);
     state.last_url = Some(url.to_string());
     state.engine = PreviewEngine::Chrome;
     Ok(())
+}
+
+/// Accept only URLs under the live preview server's base (e.g. `http://127.0.0.1:PORT/…`).
+/// Requires a `/` after the base so a longer port cannot prefix-match.
+fn url_is_under_preview_base(base_url: &str, url: &str) -> bool {
+    let base = base_url.trim_end_matches('/');
+    url == base || url.starts_with(&format!("{base}/"))
 }
 
 pub fn kill_chrome(preview: &PreviewHandle) -> Result<(), String> {
@@ -247,4 +264,37 @@ fn spawn_chrome_process(url: &str) -> Result<Child, String> {
 
 fn to_err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::url_is_under_preview_base;
+
+    #[test]
+    fn accepts_urls_under_preview_base() {
+        let base = "http://127.0.0.1:4567";
+        assert!(url_is_under_preview_base(base, base));
+        assert!(url_is_under_preview_base(base, "http://127.0.0.1:4567/"));
+        assert!(url_is_under_preview_base(
+            base,
+            "http://127.0.0.1:4567/index.html"
+        ));
+        assert!(url_is_under_preview_base(
+            "http://127.0.0.1:4567/",
+            "http://127.0.0.1:4567/a/b.html"
+        ));
+    }
+
+    #[test]
+    fn rejects_urls_outside_preview_base() {
+        let base = "http://127.0.0.1:4567";
+        assert!(!url_is_under_preview_base(base, "http://127.0.0.1:45678/x"));
+        assert!(!url_is_under_preview_base(base, "file:///etc/passwd"));
+        assert!(!url_is_under_preview_base(base, "https://evil.example/"));
+        assert!(!url_is_under_preview_base(base, "http://127.0.0.1:9999/"));
+        assert!(!url_is_under_preview_base(
+            base,
+            "http://127.0.0.1:4567.evil/"
+        ));
+    }
 }
