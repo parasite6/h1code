@@ -1527,6 +1527,38 @@ async function bootstrap() {
 
   registerDisabledCommand(commands, "file.openRecent.empty", "No Recent Folders", commandContext);
 
+  commands.register({
+    id: "terminal.newTerminal",
+    label: "New Terminal",
+    shortcut: "Ctrl+Shift+`",
+    run: async () => {
+      showBottomPanel();
+      await openShell({ focus: true });
+    },
+  });
+  registerDisabledCommand(commands, "terminal.splitTerminal", "Split Terminal", commandContext);
+  registerDisabledCommand(
+    commands,
+    "terminal.newTerminalWindow",
+    "New Terminal Window",
+    commandContext,
+    "Ctrl+Shift+C",
+  );
+  registerDisabledCommand(commands, "terminal.runTask", "Run Task...", commandContext);
+  registerDisabledCommand(commands, "terminal.runBuildTask", "Run Build Task...", commandContext);
+  registerDisabledCommand(commands, "terminal.runActiveFile", "Run Active File", commandContext);
+  registerDisabledCommand(commands, "terminal.runSelectedText", "Run Selected Text", commandContext);
+  registerDisabledCommand(commands, "terminal.showRunningTasks", "Show Running Tasks...", commandContext);
+  registerDisabledCommand(commands, "terminal.restartRunningTask", "Restart Running Task...", commandContext);
+  registerDisabledCommand(commands, "terminal.terminateTask", "Terminate Task...", commandContext);
+  registerDisabledCommand(commands, "terminal.configureTasks", "Configure Tasks...", commandContext);
+  registerDisabledCommand(
+    commands,
+    "terminal.configureDefaultBuildTask",
+    "Configure Default Build Task...",
+    commandContext,
+  );
+
   mountMenus($("menubar"), commands, [
     {
       id: "file",
@@ -1559,6 +1591,27 @@ async function bootstrap() {
         menuCommand("file.closeWindow"),
         menuSeparator(),
         menuCommand("file.exit"),
+      ],
+    },
+    {
+      id: "terminal",
+      label: "Terminal",
+      items: () => [
+        menuCommand("terminal.newTerminal"),
+        menuCommand("terminal.splitTerminal"),
+        menuCommand("terminal.newTerminalWindow"),
+        menuSeparator(),
+        menuCommand("terminal.runTask"),
+        menuCommand("terminal.runBuildTask"),
+        menuCommand("terminal.runActiveFile"),
+        menuCommand("terminal.runSelectedText"),
+        menuSeparator(),
+        menuCommand("terminal.showRunningTasks"),
+        menuCommand("terminal.restartRunningTask"),
+        menuCommand("terminal.terminateTask"),
+        menuSeparator(),
+        menuCommand("terminal.configureTasks"),
+        menuCommand("terminal.configureDefaultBuildTask"),
       ],
     },
   ]);
@@ -1694,6 +1747,13 @@ async function bootstrap() {
   if (btnClearTerminal) {
     btnClearTerminal.onclick = () => {
       terminal.clear();
+    };
+  }
+
+  const btnCloseBottom = $("btn-close-bottom");
+  if (btnCloseBottom) {
+    btnCloseBottom.onclick = () => {
+      hideBottomPanel();
     };
   }
 
@@ -1908,7 +1968,28 @@ async function bootstrap() {
     }
   }
 
+  function showBottomPanel() {
+    const app = $("app");
+    app.classList.remove("bottom-collapsed");
+    const saved = localStorage.getItem("h1code.bottomHeight");
+    let height = saved ? parseInt(saved, 10) : 220;
+    if (Number.isNaN(height)) height = 220;
+    height = Math.max(80, Math.min(height, window.innerHeight - 150));
+    app.style.gridTemplateRows = `35px 1fr 1px ${height}px 22px`;
+    localStorage.setItem("h1code.bottomPanelVisible", "1");
+    terminal.fit();
+  }
+
+  function hideBottomPanel() {
+    const app = $("app");
+    app.classList.add("bottom-collapsed");
+    // Clear inline rows so #app.bottom-collapsed CSS can apply.
+    app.style.gridTemplateRows = "";
+    localStorage.setItem("h1code.bottomPanelVisible", "0");
+  }
+
   function showBottom(mode: "terminal" | "problems", focus = true) {
+    showBottomPanel();
     document
       .querySelectorAll<HTMLElement>(".bottom-tab")
       .forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
@@ -1989,7 +2070,9 @@ async function bootstrap() {
     bottomHeight = Math.max(80, Math.min(bottomHeight, window.innerHeight - 150));
 
     body.style.gridTemplateColumns = `${sidebarWidth}px 1px 1fr`;
-    app.style.gridTemplateRows = `35px 1fr 1px ${bottomHeight}px 22px`;
+    if (!app.classList.contains("bottom-collapsed")) {
+      app.style.gridTemplateRows = `35px 1fr 1px ${bottomHeight}px 22px`;
+    }
 
     sidebarResizer.onmousedown = (e) => {
       e.preventDefault();
@@ -2048,10 +2131,17 @@ async function bootstrap() {
       const maxBottomHeight = window.innerHeight - 150;
       if (bottomHeight > maxBottomHeight) {
         bottomHeight = Math.max(80, maxBottomHeight);
-        app.style.gridTemplateRows = `35px 1fr 1px ${bottomHeight}px 22px`;
+        if (!app.classList.contains("bottom-collapsed")) {
+          app.style.gridTemplateRows = `35px 1fr 1px ${bottomHeight}px 22px`;
+        }
       }
       terminal.fit();
     });
+  }
+
+  const startBottomCollapsed = localStorage.getItem("h1code.bottomPanelVisible") === "0";
+  if (startBottomCollapsed) {
+    $("app").classList.add("bottom-collapsed");
   }
 
   initResizing();
@@ -2062,6 +2152,10 @@ async function bootstrap() {
   // Default terminal mode: interactive shell (not a dead non-interactive pane).
   // Don't steal editor focus on boot.
   await openShell({ focus: false });
+  // openShell → showBottom reveals the panel; restore collapsed if user left it closed.
+  if (startBottomCollapsed) {
+    hideBottomPanel();
+  }
 
   // Block the window from closing if there are unsaved changes.
   // IMPORTANT: event.preventDefault() must be called synchronously before

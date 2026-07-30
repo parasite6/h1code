@@ -73,11 +73,22 @@ export function mountMenus(
   }
 
   window.addEventListener("keydown", (event) => {
-    if ((event.altKey && event.key.toLowerCase() === "f") || event.key === "F10") {
+    if (event.key === "F10") {
       event.preventDefault();
       const file = bindings.find((binding) => binding.definition.id === "file");
       if (file) openRoot(file, 0);
       return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) {
+      const letter = event.key.toLowerCase();
+      const match = bindings.find((binding) =>
+        binding.definition.label.toLowerCase().startsWith(letter)
+      );
+      if (match) {
+        event.preventDefault();
+        openRoot(match, 0);
+        return;
+      }
     }
 
     const active = childMenu ?? openMenu;

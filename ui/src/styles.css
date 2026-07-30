@@ -78,6 +78,13 @@ html, body, #app {
   min-height: 0;
   min-width: 0;
 }
+#app.bottom-collapsed {
+  grid-template-rows: 35px minmax(0, 1fr) 0 0 22px;
+}
+#app.bottom-collapsed #bottom-resizer,
+#app.bottom-collapsed #bottom {
+  display: none;
+}
 
 body.resizing * {
   user-select: none !important;
