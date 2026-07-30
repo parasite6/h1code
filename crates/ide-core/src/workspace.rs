@@ -142,3 +142,36 @@ fn dunce_canonicalize(p: &Path) -> IdeResult<PathBuf> {
     }
     Ok(abs)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    /// Mirrors what `saveScratchWorkspace` does before `adopt`/`openWorkspace`:
+    /// it calls jailed `fsCreateDir(destRoot)` while no workspace is open.
+    #[test]
+    fn root_errors_without_open_workspace_like_scratch_save() {
+        let ws = Workspace::new();
+        let err = ws.root().expect_err("expected NoWorkspace");
+        assert!(
+            matches!(err, IdeError::NoWorkspace),
+            "scratch save's first FS op must hit NoWorkspace; got {err:?}"
+        );
+        assert_eq!(err.to_string(), "workspace not open");
+    }
+
+    #[test]
+    fn after_open_root_allows_nested_create_path_check() {
+        let dir = tempdir().unwrap();
+        let ws = Workspace::new();
+        ws.open(dir.path()).unwrap();
+        let root = ws.root().unwrap();
+        let dest = root.join("Scratch Workspace");
+        // path_jail accepts non-existent leaves under an open root (create/write).
+        let jailed = crate::path_jail::ensure_within_root(&root, &dest).unwrap();
+        fs::create_dir_all(&jailed).unwrap();
+        assert!(jailed.is_dir());
+    }
+}

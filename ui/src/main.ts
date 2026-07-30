@@ -627,53 +627,132 @@ async function bootstrap() {
     }
   }
 
-  function scratchRelativePath(path: string) {
-    if (!scratchWorkspace) return path;
+  function scratchRelativePath(path: string, rootPath = scratchWorkspace?.rootPath) {
+    if (!rootPath) return path;
     return path
-      .slice(scratchWorkspace.rootPath.length)
+      .slice(rootPath.length)
       .replace(/^[\\/]+/, "");
   }
 
-  async function writeScratchEntry(destRoot: string, entry: ScratchEntry) {
-    const dest = joinPath(destRoot, scratchRelativePath(entry.path));
+  async function writeScratchEntry(
+    destRoot: string,
+    entry: ScratchEntry,
+    scratchRootPath: string
+  ) {
+    const dest = joinPath(destRoot, scratchRelativePath(entry.path, scratchRootPath));
     if (entry.kind === "folder") {
       await ipc.fsCreateDir(dest);
       for (const child of entry.children) {
-        await writeScratchEntry(destRoot, child);
+        await writeScratchEntry(destRoot, child, scratchRootPath);
       }
       return;
     }
     await ipc.fsWrite(dest, entry.content);
   }
 
+  /** When set, saveScratchWorkspace skips the folder dialog (diagnosis only). */
+  let debugForcedScratchSaveParent: string | null = null;
+
   async function saveScratchWorkspace(): Promise<boolean> {
-    if (!scratchWorkspace) return false;
+    saveDebug("saveScratchWorkspace:start");
+    if (!scratchWorkspace) {
+      saveDebug("saveScratchWorkspace:no-scratch");
+      return false;
+    }
     syncScratchTabs();
+    // Local snapshot: adoptWorkspaceRoot clears scratchWorkspace before writes.
     const scratch = scratchWorkspace;
     const active = tabs.active();
     const activeScratchFile = active ? findScratchFile(active.path) : null;
-    const activeRelativePath = activeScratchFile ? scratchRelativePath(activeScratchFile.path) : null;
-
-    const picked = await openDialog({
-      title: "Save Scratch Workspace",
-      directory: true,
-      multiple: false,
+    const activeRelativePath = activeScratchFile
+      ? scratchRelativePath(activeScratchFile.path, scratch.rootPath)
+      : null;
+    saveDebug("saveScratchWorkspace:pre-dialog", {
+      scratchName: scratch.name,
+      scratchRoot: scratch.rootPath,
+      childCount: scratch.children.length,
+      activeRelativePath,
+      forcedDest: debugForcedScratchSaveParent,
     });
-    if (!picked || Array.isArray(picked)) return false;
+
+    let picked: string | string[] | null = debugForcedScratchSaveParent;
+    if (!picked) {
+      picked = await openDialog({
+        title: "Save Scratch Workspace",
+        directory: true,
+        multiple: false,
+      });
+    } else {
+      saveDebug("saveScratchWorkspace:using-forced-dest", { picked });
+    }
+    if (!picked || Array.isArray(picked)) {
+      saveDebug("saveScratchWorkspace:dialog-cancelled", { picked });
+      return false;
+    }
 
     const destRoot = joinPath(picked, scratch.name);
+    saveDebug("saveScratchWorkspace:will-write", {
+      picked,
+      destRoot,
+      workspaceBefore: currentWorkspace?.root ?? null,
+      scratchStillSet: scratchWorkspace !== null,
+    });
+
+    // FS IPC is workspace-jailed: open the chosen parent as the jail root
+    // before creating destRoot — same pattern as ensureWorkspaceForFile for
+    // untitled Save. Does not weaken the jail; ops stay under `picked`.
+    saveDebug("saveScratchWorkspace:adopt-parent", { picked });
+    if (!(await adoptWorkspaceRoot(picked))) {
+      saveDebug("saveScratchWorkspace:adopt-parent-fail", { picked });
+      return false;
+    }
+
     try {
+      saveDebug("saveScratchWorkspace:fsCreateDir", { destRoot });
       await ipc.fsCreateDir(destRoot);
+      saveDebug("saveScratchWorkspace:fsCreateDir:ok", { destRoot });
       for (const child of scratch.children) {
-        await writeScratchEntry(destRoot, child);
+        saveDebug("saveScratchWorkspace:write-child", {
+          childPath: child.path,
+          childKind: child.kind,
+          dest: joinPath(destRoot, scratchRelativePath(child.path, scratch.rootPath)),
+        });
+        await writeScratchEntry(destRoot, child, scratch.rootPath);
       }
-      scratchWorkspace = null;
+      saveDebug("saveScratchWorkspace:cleared-scratch", { destRoot });
       const opened = await openWorkspace(destRoot, false, true);
+      saveDebug("saveScratchWorkspace:openWorkspace-result", {
+        opened,
+        workspaceAfter: currentWorkspace?.root ?? null,
+        scratchAfter: scratchWorkspace?.rootPath ?? null,
+        activeAfter: tabs.active()?.path ?? null,
+      });
       if (opened && activeRelativePath) {
-        await tabs.open(joinPath(destRoot, activeRelativePath));
+        const reopenPath = joinPath(destRoot, activeRelativePath);
+        saveDebug("saveScratchWorkspace:reopen-active", { reopenPath });
+        await tabs.open(reopenPath);
       }
+      saveDebug("saveScratchWorkspace:done", {
+        ok: opened,
+        workspace: currentWorkspace?.root ?? null,
+        activeTab: tabs.active()?.path ?? null,
+        activeTemporary: tabs.active() ? isTemporaryPath(tabs.active()!.path) : null,
+        scratch: scratchWorkspace?.rootPath ?? null,
+      });
       return opened;
     } catch (e) {
+      // adopt already cleared the live scratch pointer — restore so the user can retry.
+      scratchWorkspace = scratch;
+      explorer.setScratchRoot(scratch.name, scratch.rootPath, scratch.children);
+      updateWorkspaceUi(currentWorkspace);
+      saveDebug("saveScratchWorkspace:fail", {
+        error: String(e),
+        destRoot,
+        workspace: currentWorkspace?.root ?? null,
+        scratchStillSet: scratchWorkspace !== null,
+        activeTab: tabs.active()?.path ?? null,
+        activeTemporary: tabs.active() ? isTemporaryPath(tabs.active()!.path) : null,
+      });
       terminal.log(`save scratch workspace failed: ${String(e)}`);
       return false;
     }
@@ -829,9 +908,13 @@ async function bootstrap() {
       initialValue: "Scratch Workspace",
       confirmLabel: "Start Workspace",
     });
-    if (!name) return;
+    if (!name) {
+      saveDebug("createFolderFromEmptyState:cancelled");
+      return;
+    }
 
     if (!(await confirmDiscardAllUnsaved("Starting a scratch workspace will close current open files."))) {
+      saveDebug("createFolderFromEmptyState:discard-aborted");
       return;
     }
     await cleanupRunTempDir();
@@ -860,6 +943,10 @@ async function bootstrap() {
     search.setWorkspaceRoot(null);
     updateWorkspaceUi(null);
     showEditor(false);
+    saveDebug("createFolderFromEmptyState:ok", {
+      scratchName: scratchWorkspace.name,
+      scratchRoot: scratchWorkspace.rootPath,
+    });
   }
 
   async function restoreWorkspaceTabs(workspaceRoot: string) {
@@ -1287,13 +1374,32 @@ async function bootstrap() {
     } catch {
       return;
     }
-    // eslint-disable-next-line no-console
-    console.log("[save-debug]", label, {
+    const payload = {
       workspace: currentWorkspace?.root ?? null,
+      scratch: scratchWorkspace
+        ? { root: scratchWorkspace.rootPath, name: scratchWorkspace.name, children: scratchWorkspace.children.length }
+        : null,
       activeTab: tabs.active()?.path ?? null,
       activeTemporary: tabs.active() ? isTemporaryPath(tabs.active()!.path) : null,
+      activeDirty: tabs.active()?.dirty ?? null,
+      activeKind: tabs.active()?.kind ?? null,
       ...extra,
-    });
+    };
+    const entry = { t: Date.now(), label, payload };
+    try {
+      const w = window as unknown as { __saveDebugLog?: Array<typeof entry> };
+      if (!w.__saveDebugLog) w.__saveDebugLog = [];
+      w.__saveDebugLog.push(entry);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line no-console
+    console.log("[save-debug]", label, payload);
+    try {
+      terminal.log(`[save-debug] ${label} ${JSON.stringify(payload)}`);
+    } catch {
+      /* terminal may not be ready during early boot */
+    }
   }
 
   /**
@@ -1347,23 +1453,46 @@ async function bootstrap() {
   // them into real on-disk files on success. Returns true if persisted.
   async function saveActiveWithDialog(): Promise<boolean> {
     const active = tabs.active();
-    saveDebug("saveActiveWithDialog:start");
+    saveDebug("saveActiveWithDialog:start", {
+      hasActive: Boolean(active),
+      isScratchFile: Boolean(active && scratchWorkspace && findScratchFile(active.path)),
+      branchHint: !active && scratchWorkspace
+        ? "no-active+scratch"
+        : !active
+          ? "no-active"
+          : active && !isTextTabKind(active.kind)
+            ? "non-text"
+            : scratchWorkspace && findScratchFile(active.path)
+              ? "scratch-file"
+              : active && !isTemporaryPath(active.path)
+                ? "disk-save"
+                : "untitled-dialog",
+    });
     if (!active && scratchWorkspace) {
+      saveDebug("saveActiveWithDialog:route", { route: "saveScratchWorkspace(no-active)" });
       return saveScratchWorkspace();
     }
-    if (!active) return false;
+    if (!active) {
+      saveDebug("saveActiveWithDialog:early-return", { reason: "no-active" });
+      return false;
+    }
     if (!isTextTabKind(active.kind)) {
       // Media/binary tabs have nothing to write back through the text editor.
+      saveDebug("saveActiveWithDialog:early-return", { reason: "non-text", kind: active.kind });
       return true;
     }
     if (scratchWorkspace && findScratchFile(active.path)) {
+      saveDebug("saveActiveWithDialog:route", { route: "saveScratchWorkspace(active-scratch-file)" });
       return saveScratchWorkspace();
     }
     if (!isTemporaryPath(active.path)) {
+      saveDebug("saveActiveWithDialog:disk-save-in-place", { path: active.path });
       try {
         await tabs.saveActive(editor.getDoc());
+        saveDebug("saveActiveWithDialog:disk-save-ok", { path: active.path });
         return true;
       } catch (e) {
+        saveDebug("saveActiveWithDialog:disk-save-fail", { error: String(e) });
         terminal.log(`save failed: ${String(e)}`);
         return false;
       }
@@ -1947,7 +2076,13 @@ async function bootstrap() {
     // Remember prior mode before snapshot/cleanup so a restored shell isn't
     // mis-classified after prepareRunTempSnapshot touches PTYs.
     restoreShellAfterRun = activePtyKind === "shell";
-    saveDebug("runFile:start", { path, temporary: isTemporaryPath(path) });
+    saveDebug("runFile:start", {
+      path,
+      temporary: isTemporaryPath(path),
+      hasWorkspace: Boolean(currentWorkspace),
+      hasScratch: Boolean(scratchWorkspace),
+      isScratchFile: Boolean(scratchWorkspace && findScratchFile(path)),
+    });
 
     const restoreShellIfNeeded = async () => {
       if (restoreShellAfterRun && activePtyKind !== "shell") {
@@ -1961,11 +2096,18 @@ async function bootstrap() {
     if (isTemporaryPath(path) || !currentWorkspace) {
       saveDebug("runFile:needs-save-or-workspace", {
         reason: isTemporaryPath(path) ? "temporary-path" : "no-workspace",
+        path,
+        workspace: currentWorkspace?.root ?? null,
+        scratch: scratchWorkspace?.rootPath ?? null,
       });
       terminal.log("Save file first.", { newPrompt: true });
       const saved = await saveActiveWithDialog();
       if (!saved) {
-        saveDebug("runFile:save-aborted");
+        saveDebug("runFile:save-aborted", {
+          workspace: currentWorkspace?.root ?? null,
+          scratch: scratchWorkspace?.rootPath ?? null,
+          activeAfter: tabs.active()?.path ?? null,
+        });
         await restoreShellIfNeeded();
         return;
       }
@@ -1973,17 +2115,29 @@ async function bootstrap() {
       if (!savedActive || isTemporaryPath(savedActive.path)) {
         saveDebug("runFile:still-temporary-after-save", {
           activeAfter: savedActive?.path ?? null,
+          scratch: scratchWorkspace?.rootPath ?? null,
+          workspace: currentWorkspace?.root ?? null,
         });
         await restoreShellIfNeeded();
         return;
       }
       path = savedActive.path;
       if (!currentWorkspace) {
-        saveDebug("runFile:still-no-workspace-after-save");
+        saveDebug("runFile:still-no-workspace-after-save", {
+          path,
+          scratch: scratchWorkspace?.rootPath ?? null,
+        });
         terminal.log("Open a workspace folder to run files.", { newPrompt: true });
         await restoreShellIfNeeded();
         return;
       }
+      saveDebug("runFile:post-save-ok", {
+        path,
+        workspace: currentWorkspace.root,
+        scratch: scratchWorkspace?.rootPath ?? null,
+      });
+    } else {
+      saveDebug("runFile:already-runnable", { path, workspace: currentWorkspace.root });
     }
 
     // Frictionless run: snapshot open buffers into workspace/.h1code/run_temp_/
@@ -2371,7 +2525,7 @@ async function bootstrap() {
   }
 
   // Check if a workspace is already open on startup
-  ipc.workspaceInfo().then((info) => {
+  ipc.workspaceInfo().then(async (info) => {
     debugRecentProjects("startup workspaceInfo resolved", {
       workspace: info?.root ?? null,
       recentCount: recentProjects.length,
@@ -2386,6 +2540,128 @@ async function bootstrap() {
       addToRecentProjects(info.root, info.name).catch(() => {});
     }
     renderEmptyState();
+
+    // Diagnosis helper: New Folder → scratch file → Run/save → Save again.
+    // Enable with ?reproScratchSave=1 or localStorage h1code.debug.reproScratchSave=1.
+    // Force-parent via localStorage h1code.debug.saveScratchTo (default /tmp/h1code-repro-real).
+    try {
+      const params = new URLSearchParams(location.search);
+      const wantRepro =
+        params.get("reproScratchSave") === "1" ||
+        localStorage.getItem("h1code.debug.reproScratchSave") === "1";
+      if (wantRepro) {
+        localStorage.setItem("h1code.debug.save", "1");
+        localStorage.removeItem("h1code.debug.reproScratchSave");
+        const forcedParent =
+          localStorage.getItem("h1code.debug.saveScratchTo") ||
+          params.get("saveScratchTo") ||
+          "/tmp/h1code-repro-real";
+        // Give shell/UI a beat, then drive the reported sequence without native dialogs.
+        setTimeout(() => {
+          void (async () => {
+            saveDebug("repro:begin", { forcedParent });
+            try {
+              await cleanupRunTempDir();
+              fileSync.clear();
+              try {
+                await ipc.workspaceClose();
+              } catch {
+                /* ignore */
+              }
+              for (const tab of tabs.all()) {
+                tabs.close(tab.path);
+              }
+              currentWorkspace = null;
+              scratchWorkspaceCounter += 1;
+              scratchWorkspace = {
+                id: scratchWorkspaceCounter,
+                name: "Scratch Workspace",
+                rootPath: `scratch:${scratchWorkspaceCounter}`,
+                children: [],
+              };
+              explorer.setScratchRoot(
+                scratchWorkspace.name,
+                scratchWorkspace.rootPath,
+                scratchWorkspace.children
+              );
+              search.setWorkspaceRoot(null);
+              updateWorkspaceUi(null);
+              saveDebug("repro:scratch-created");
+
+              const fileName = "repro_run.py";
+              const filePath = joinPath(scratchWorkspace.rootPath, fileName);
+              const file: ScratchFile = {
+                kind: "file",
+                name: fileName,
+                path: filePath,
+                content: "print('scratch-repro')\n",
+              };
+              scratchWorkspace.children.unshift(file);
+              explorer.setScratchRoot(
+                scratchWorkspace.name,
+                scratchWorkspace.rootPath,
+                scratchWorkspace.children
+              );
+              openScratchFile(file.path);
+              editor.setDoc(file.content, file.path);
+              tabs.updateActiveContent(file.content);
+              saveDebug("repro:file-created", { filePath });
+
+              debugForcedScratchSaveParent = forcedParent;
+              saveDebug("repro:run-1");
+              await runFile(filePath);
+              saveDebug("repro:after-run-1", {
+                workspaceRoot: currentWorkspace ? (currentWorkspace as WorkspaceInfo).root : null,
+                scratchRoot: scratchWorkspace ? scratchWorkspace.rootPath : null,
+                active: tabs.active()?.path ?? null,
+              });
+
+              saveDebug("repro:save-2");
+              const save2 = await saveActiveWithDialog();
+              saveDebug("repro:after-save-2", {
+                save2,
+                workspaceRoot: currentWorkspace ? (currentWorkspace as WorkspaceInfo).root : null,
+                scratchRoot: scratchWorkspace ? scratchWorkspace.rootPath : null,
+                active: tabs.active()?.path ?? null,
+              });
+              saveDebug("repro:done");
+            } catch (e) {
+              saveDebug("repro:error", { error: String(e) });
+            } finally {
+              debugForcedScratchSaveParent = null;
+              // Dump the in-memory trace so we can read it without DevTools.
+              try {
+                const w = window as unknown as { __saveDebugLog?: unknown[] };
+                const dumpTargets = [
+                  forcedParent,
+                  "/tmp/h1code-repro-real",
+                  "/home/andrewunknown/Documents/github/h1code",
+                ];
+                for (const dumpRoot of dumpTargets) {
+                  try {
+                    const dumpOk = await adoptWorkspaceRoot(dumpRoot);
+                    if (!dumpOk) continue;
+                    const dumpPath = joinPath(dumpRoot, "h1code-save-debug-trace.json");
+                    await ipc.fsWrite(
+                      dumpPath,
+                      JSON.stringify(w.__saveDebugLog ?? [], null, 2) + "\n"
+                    );
+                    saveDebug("repro:trace-dumped", { dumpPath });
+                    break;
+                  } catch {
+                    /* try next dump root */
+                  }
+                }
+              } catch (dumpErr) {
+                console.error("failed to dump save-debug trace", dumpErr);
+              }
+            }
+          })();
+        }, 800);
+      }
+    } catch (e) {
+      console.error("scratch-save repro setup failed", e);
+    }
   }).catch((e) => {
     console.error("Failed to query initial workspace", e);
     renderEmptyState();
