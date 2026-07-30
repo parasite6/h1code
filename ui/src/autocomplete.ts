@@ -24,6 +24,8 @@ const RING_FLUSH_MS = 1000;
 const DEFAULT_SETTINGS: AutocompleteSettings = {
   enabled: false,
   endpoint: "http://127.0.0.1:8081",
+  model: "codegemma-2b-q4_k_m",
+  llamaServerPath: "",
   debounceMs: 200,
   nPrefix: 256,
   nSuffix: 64,

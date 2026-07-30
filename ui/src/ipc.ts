@@ -167,6 +167,10 @@ export interface PreviewStateSnapshot {
 export interface AutocompleteSettings {
   enabled: boolean;
   endpoint: string;
+  /** Stable catalog id from fimModels / fim_models. */
+  model: string;
+  /** Absolute path to llama-server when not on PATH (empty = search PATH). */
+  llamaServerPath: string;
   debounceMs: number;
   nPrefix: number;
   nSuffix: number;
@@ -175,6 +179,23 @@ export interface AutocompleteSettings {
   ringNChunks: number;
   ringChunkSize: number;
   ringScope: number;
+}
+
+/** Writable autocomplete fields from the Settings UI. */
+export interface AutocompleteSettingsUpdate {
+  enabled: boolean;
+  endpoint: string;
+  model: string;
+  llamaServerPath?: string;
+}
+
+export interface LlamaServerStatus {
+  running: boolean;
+  owned: boolean;
+  port: number | null;
+  pid: number | null;
+  lastError: string | null;
+  message: string;
 }
 
 export interface InfillChunk {
@@ -201,6 +222,8 @@ export interface FimModelOption {
   label: string;
   dir: string;
   gguf: string;
+  ub: number;
+  b: number;
 }
 
 export const ipc = {
@@ -308,7 +331,17 @@ export const ipc = {
     invoke<PreviewStateSnapshot>("cmd_preview_get_state"),
   autocompleteSettingsGet: () =>
     invoke<AutocompleteSettings>("cmd_autocomplete_settings_get"),
+  autocompleteSettingsSet: (payload: AutocompleteSettingsUpdate) =>
+    invoke<AutocompleteSettings>("cmd_autocomplete_settings_set", { payload }),
   fimModelsList: () => invoke<FimModelOption[]>("cmd_fim_models_list"),
+  llamaServerStart: () =>
+    invoke<LlamaServerStatus>("cmd_llama_server_start"),
+  llamaServerStop: () => invoke<LlamaServerStatus>("cmd_llama_server_stop"),
+  llamaServerStatus: () =>
+    invoke<LlamaServerStatus>("cmd_llama_server_status"),
+  /** Respects autocomplete_enabled; safe to call on bootstrap / after tauri-dev restart. */
+  llamaServerEnsure: () =>
+    invoke<LlamaServerStatus>("cmd_llama_server_ensure"),
   llamaInfill: (payload: InfillRequest) =>
     invoke<InfillResponse>("cmd_llama_infill", { payload }),
   llamaInfillWarmup: (payload: {

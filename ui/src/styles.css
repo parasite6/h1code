@@ -550,6 +550,165 @@ body.resizing #bottom-content {
   margin-bottom: 4px;
 }
 
+/* Settings editor tab (center pane) */
+#settings-viewer {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--bg-editor);
+  padding: 28px 24px 40px;
+}
+#settings-viewer.hidden {
+  display: none;
+}
+.settings-viewer-inner {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-viewer-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.settings-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: visible;
+  padding: 0;
+}
+.settings-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 4px 0;
+}
+.settings-empty.hidden,
+.settings-panel-body.hidden {
+  display: none !important;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.settings-section-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-main);
+}
+.settings-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.settings-toggle input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent-color);
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.settings-field select,
+.settings-field input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  background-color: #1f1f1f;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 4px;
+  padding: 6px 28px 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.settings-field input[type="text"] {
+  background-image: none;
+  padding-right: 8px;
+}
+.settings-field select option {
+  background-color: #1f1f1f;
+  color: var(--text-main);
+}
+.settings-field select:focus,
+.settings-field input[type="text"]:focus {
+  border-color: var(--accent-color);
+}
+.settings-field select:disabled,
+.settings-field input:disabled,
+.settings-toggle input:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.settings-model-actions {
+  display: flex;
+  gap: 8px;
+}
+.settings-action-btn {
+  background: #202022;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-action-btn:hover:not(:disabled) {
+  background: #2a2a2d;
+  border-color: #3c3c40;
+}
+.settings-action-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.settings-meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dark);
+}
+.settings-status {
+  min-height: 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.settings-status[data-kind="error"] {
+  color: #e57373;
+}
+
 /* Polish Explorer Node Rows with SVG Icon Alignment */
 .file-tree-node {
   display: flex;

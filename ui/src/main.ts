@@ -7,7 +7,14 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import { ipc, onCoreEvent, type CoreDiagnostic, type CoreEvent, type RecentProject, type WorkspaceInfo } from "./ipc";
 import { mountEditor, destroyEditor } from "./editor";
-import { mountTabs, isTemporaryPath, type Tab } from "./tabs";
+import {
+  mountTabs,
+  isTemporaryPath,
+  isSettingsPath,
+  isVirtualPath,
+  SETTINGS_TAB_PATH,
+  type Tab,
+} from "./tabs";
 import { mountMediaViewer } from "./mediaViewer";
 import { isTextTabKind, classifyOpenPath } from "./fileKind";
 import { mountExplorer, type ScratchEntry, type ScratchFile, type ScratchFolder } from "./explorer";
@@ -16,6 +23,7 @@ import { confirmSave, promptName, type SaveDecision } from "./modal";
 import { mountTerminal } from "./terminal";
 import { mountProblems, type ProblemEntry } from "./problems";
 import { mountSearch } from "./search";
+import { mountSettings } from "./settings";
 import { mountPreview } from "./preview";
 import {
   chooseRunTarget,
@@ -106,6 +114,8 @@ async function bootstrap() {
   const terminal = mountTerminal($("terminal"));
   const problems = mountProblems($("problems"));
   const search = mountSearch($("panel-search"));
+  const settingsViewerHost = $("settings-viewer");
+  const settings = mountSettings(settingsViewerHost);
   const editorHost = $("editor");
   const mediaViewerHost = $("media-viewer");
   const editorEmptyState = $("editor-empty-state");
@@ -915,7 +925,10 @@ async function bootstrap() {
     return tabs
       .all()
       .map((tab) => tab.path)
-      .filter((path) => !isTemporaryPath(path) && pathBelongsToWorkspace(path, workspaceRoot));
+      .filter(
+        (path) =>
+          !isVirtualPath(path) && pathBelongsToWorkspace(path, workspaceRoot)
+      );
   }
 
   async function persistWorkspaceTabState() {
@@ -926,7 +939,7 @@ async function bootstrap() {
     const active = tabs.active();
     if (
       active &&
-      !isTemporaryPath(active.path) &&
+      !isVirtualPath(active.path) &&
       pathBelongsToWorkspace(active.path, currentWorkspace.root)
     ) {
       await ipc.workspaceLastActiveFileSet(currentWorkspace.root, active.path);
@@ -1002,6 +1015,7 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      settings.setWorkspaceRoot(info.root);
       await editor.reloadAutocompleteSettings().catch(() => {});
       recentDebug("openWorkspace.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
@@ -1009,7 +1023,7 @@ async function bootstrap() {
         await restoreWorkspaceTabs(info.root);
       }
       for (const tab of tabs.all()) {
-        if (!isTemporaryPath(tab.path)) {
+        if (!isVirtualPath(tab.path)) {
           await fileSync.noteBaseline(tab.path);
         }
       }
@@ -1113,6 +1127,7 @@ async function bootstrap() {
     };
     explorer.setScratchRoot(scratchWorkspace.name, scratchWorkspace.rootPath, scratchWorkspace.children);
     search.setWorkspaceRoot(null);
+    settings.setWorkspaceRoot(null);
     updateWorkspaceUi(null);
     showEditor(false);
     newfolderDebug("createFolderFromEmptyState:ok", {
@@ -1302,10 +1317,15 @@ async function bootstrap() {
     showCenterPane(active ? "editor" : "empty");
   }
 
-  function showCenterPane(mode: "empty" | "editor" | "viewer") {
+  function openSettingsTab() {
+    tabs.openSpecialTab(SETTINGS_TAB_PATH, "Settings");
+  }
+
+  function showCenterPane(mode: "empty" | "editor" | "viewer" | "settings") {
     editorEmptyState.classList.toggle("hidden", mode !== "empty");
     editorHost.classList.toggle("hidden", mode !== "editor");
     mediaViewerHost.classList.toggle("hidden", mode !== "viewer");
+    settingsViewerHost.classList.toggle("hidden", mode !== "settings");
     if (mode !== "viewer") {
       mediaViewer.hide();
     }
@@ -1328,18 +1348,19 @@ async function bootstrap() {
     return /\.html?$/i.test(path);
   }
 
-  /** Run executes Python; HTML uses Preview; media/binary tabs stay disabled. */
+  /** Run executes Python; HTML uses Preview; media/binary/settings tabs stay disabled. */
   function syncRunButton() {
     const active = tabs.active();
     const htmlActive = !!active && isHtmlPath(active.path);
-    const nonText = !!active && !isTextTabKind(active.kind);
-    runButton.disabled = htmlActive || nonText;
+    const nonRunnable =
+      !!active && (!isTextTabKind(active.kind) || isSettingsPath(active.path));
+    runButton.disabled = htmlActive || nonRunnable;
     runButton.title = htmlActive
       ? RUN_BUTTON_HTML_TITLE
-      : nonText
+      : nonRunnable
         ? "Can't run this file type"
         : RUN_BUTTON_TITLE;
-    if (htmlActive || nonText) hideRunTargetPopover();
+    if (htmlActive || nonRunnable) hideRunTargetPopover();
   }
 
   function showRunTargetPopover(activePath: string, suggestion: RunTargetSuggestion) {
@@ -1429,7 +1450,13 @@ async function bootstrap() {
 
   tabs.onActiveChange((tab) => {
     if (tab) {
-      if (!isTextTabKind(tab.kind)) {
+      if (isSettingsPath(tab.path)) {
+        showCenterPane("settings");
+        settings.open();
+        editor.setDoc("", "");
+        editor.setDiagnostics([]);
+        fileSync.onActiveTab(null);
+      } else if (!isTextTabKind(tab.kind)) {
         showCenterPane("viewer");
         mediaViewer.show(tab);
         editor.setDoc("", "");
@@ -1642,6 +1669,7 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      settings.setWorkspaceRoot(info.root);
       await editor.reloadAutocompleteSettings().catch(() => {});
       recentDebug("adoptWorkspaceRoot.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
@@ -1705,9 +1733,12 @@ async function bootstrap() {
       saveDebug("saveActiveWithDialog:early-return", { reason: "no-active" });
       return false;
     }
-    if (!isTextTabKind(active.kind)) {
-      // Media/binary tabs have nothing to write back through the text editor.
-      saveDebug("saveActiveWithDialog:early-return", { reason: "non-text", kind: active.kind });
+    if (!isTextTabKind(active.kind) || isSettingsPath(active.path)) {
+      // Media/binary/settings tabs have nothing to write back through the text editor.
+      saveDebug("saveActiveWithDialog:early-return", {
+        reason: isSettingsPath(active.path) ? "settings" : "non-text",
+        kind: active.kind,
+      });
       return true;
     }
     if (scratchWorkspace && findScratchFile(active.path)) {
@@ -1773,7 +1804,7 @@ async function bootstrap() {
       return saveScratchWorkspace();
     }
     if (!active) return false;
-    if (!isTextTabKind(active.kind)) {
+    if (!isTextTabKind(active.kind) || isSettingsPath(active.path)) {
       return true;
     }
     if (scratchWorkspace && findScratchFile(active.path)) {
@@ -2043,7 +2074,12 @@ async function bootstrap() {
     run: () => saveAllDirtyTabs(),
   });
   registerDisabledCommand(commands, "file.autoSave", "Auto Save", commandContext);
-  registerDisabledCommand(commands, "file.preferences", "Preferences", commandContext);
+  commands.register({
+    id: "file.settings",
+    label: "Settings",
+    shortcut: "Ctrl+,",
+    run: () => openSettingsTab(),
+  });
   registerDisabledCommand(commands, "file.revertFile", "Revert File", commandContext);
   commands.register({
     id: "file.closeEditor",
@@ -2148,7 +2184,7 @@ async function bootstrap() {
         menuCommand("file.saveAll"),
         menuCommand("file.autoSave"),
         menuSeparator(),
-        menuCommand("file.preferences"),
+        menuCommand("file.settings"),
         menuSeparator(),
         menuCommand("file.revertFile"),
         menuCommand("file.closeEditor"),
@@ -2234,6 +2270,11 @@ async function bootstrap() {
   tabs.onCloseRequest((path) => {
     closeTabWithConfirm(path).catch(() => {});
   });
+
+  const btnSettings = document.getElementById("btn-settings");
+  if (btnSettings) {
+    btnSettings.onclick = () => openSettingsTab();
+  }
 
   const btnNewFile = document.getElementById("btn-new-file");
   if (btnNewFile) {
@@ -2455,7 +2496,7 @@ async function bootstrap() {
       terminal.log("Use Preview for HTML files.", { newPrompt: true });
       return;
     }
-    if (!isTextTabKind(active.kind)) {
+    if (!isTextTabKind(active.kind) || isSettingsPath(active.path)) {
       terminal.log("Can't run this file type.", { newPrompt: true });
       return;
     }
@@ -2503,18 +2544,27 @@ async function bootstrap() {
     }
   };
 
+  function showSidebarMode(mode: string) {
+    document.querySelectorAll(".rail-btn").forEach((b) => {
+      b.classList.toggle("active", (b as HTMLElement).dataset.mode === mode);
+    });
+    document
+      .querySelectorAll<HTMLElement>(".sidebar-view")
+      .forEach((v) => v.classList.add("hidden"));
+    $(`panel-${mode}`).classList.remove("hidden");
+    if (mode === "search") search.focus();
+  }
+
   // Activity rail
   document.querySelectorAll<HTMLElement>(".rail-btn").forEach((btn) => {
     btn.onclick = () => {
-      document.querySelectorAll(".rail-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
       const mode = btn.dataset.mode!;
-      document
-        .querySelectorAll<HTMLElement>(".sidebar-view")
-        .forEach((v) => v.classList.add("hidden"));
-      $(`panel-${mode}`).classList.remove("hidden");
-      if (mode === "search") search.focus();
+      showSidebarMode(mode);
     };
+  });
+
+  settings.onSaved(() => {
+    void editor.reloadAutocompleteSettings().catch(() => {});
   });
 
   // Bottom tabs
@@ -2566,12 +2616,13 @@ async function bootstrap() {
       scratchWorkspace = null;
       explorer.clearScratchRoot();
       search.setWorkspaceRoot(null);
+      settings.setWorkspaceRoot(null);
       diagnostics.clear();
       editor.setDiagnostics([]);
       refreshProblems();
-      // Close disk-backed tabs; leave untitled/scratch alone if any.
+      // Close disk-backed tabs; leave untitled/scratch/settings alone if any.
       for (const tab of [...tabs.all()]) {
-        if (!isTemporaryPath(tab.path)) tabs.close(tab.path);
+        if (!isTemporaryPath(tab.path) && !isSettingsPath(tab.path)) tabs.close(tab.path);
       }
       renderEmptyState();
       updateWorkspaceUi(null);
@@ -2647,6 +2698,10 @@ async function bootstrap() {
     if (mod && e.key.toLowerCase() === "w") {
       e.preventDefault();
       commands.execute("file.closeEditor").catch(() => {});
+    }
+    if (mod && e.key === ",") {
+      e.preventDefault();
+      commands.execute("file.settings").catch(() => {});
     }
   });
 
@@ -2792,7 +2847,9 @@ async function bootstrap() {
     console.error("Could not attach close handler", e);
   }
 
-  // Check if a workspace is already open on startup
+  // Check if a workspace is already open on startup (Vite HMR / soft reload).
+  // After a full `tauri dev` Rust rebuild, Exit kills the owned llama Child and
+  // workspace state is empty — Open Folder (or Recent) runs ensure again.
   ipc.workspaceInfo().then(async (info) => {
     recentDebug("startup.workspaceInfo", {
       workspace: info?.root ?? null,
@@ -2803,6 +2860,15 @@ async function bootstrap() {
       currentWorkspace = info;
       updateWorkspaceUi(info);
       explorer.setRoot(info.root).catch(() => {});
+      search.setWorkspaceRoot(info.root);
+      settings.setWorkspaceRoot(info.root);
+      await editor.reloadAutocompleteSettings().catch(() => {});
+      // Re-ensure after HMR bootstrap (or if shell still holds the workspace).
+      ipc.llamaServerEnsure().catch((e) => {
+        terminal.log(`WARN: llama-server ensure failed: ${String(e)}`, {
+          newPrompt: true,
+        });
+      });
       recentDebug("startup.workspaceFound.addRecent", {
         path: info.root,
         name: info.name,
@@ -2855,6 +2921,7 @@ async function bootstrap() {
                 scratchWorkspace.children
               );
               search.setWorkspaceRoot(null);
+              settings.setWorkspaceRoot(null);
               updateWorkspaceUi(null);
               saveDebug("repro:scratch-created");
 
@@ -2975,6 +3042,7 @@ async function bootstrap() {
                 updateWorkspaceUi(null);
                 explorer.clearScratchRoot();
                 search.setWorkspaceRoot(null);
+                settings.setWorkspaceRoot(null);
                 renderEmptyState();
                 recentDebug("repro.write.afterCloseForUi", {
                   recentPaths: recentProjects.map((p) => p.path),
@@ -3066,6 +3134,7 @@ async function bootstrap() {
                   scratchWorkspace.children
                 );
                 search.setWorkspaceRoot(null);
+                settings.setWorkspaceRoot(null);
                 updateWorkspaceUi(null);
                 newfolderDebug("repro:seeded-scratch-cwd", {
                   scratchRoot: scratchWorkspace.rootPath,

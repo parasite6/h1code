@@ -1,7 +1,6 @@
-//! Known local FIM model trees under the repo root (gitignored GGUF binaries).
-//! Paths are relative to the `<h1code>` project root — not the open workspace.
-//! Settings UI / launch helpers should resolve these against the app install or
-//! checkout root; do not hardcode `/run/media/...` absolute paths.
+//! Known local FIM model trees (gitignored GGUF binaries).
+//! Paths are relative to the **open workspace root** (typically the h1code
+//! checkout when developing). Do not hardcode machine-absolute paths.
 
 use serde::Serialize;
 
@@ -17,6 +16,10 @@ pub struct FimModelOption {
     pub dir: &'static str,
     /// GGUF filename inside [`Self::dir`].
     pub gguf: &'static str,
+    /// llama-server `-ub` (micro-batch) size.
+    pub ub: u32,
+    /// llama-server `-b` (batch) size.
+    pub b: u32,
 }
 
 impl FimModelOption {
@@ -32,6 +35,8 @@ pub const CODEGEMMA_2B: FimModelOption = FimModelOption {
     label: "CodeGemma 2B (Q4_K_M)",
     dir: "codegemma-2b-GGUF",
     gguf: "codegemma-2b-Q4_K_M.gguf",
+    ub: 512,
+    b: 512,
 };
 
 /// Qwen2.5-Coder 1.5B Q4_K_M.
@@ -40,10 +45,22 @@ pub const QWEN25_CODER_15B: FimModelOption = FimModelOption {
     label: "Qwen2.5-Coder 1.5B (Q4_K_M)",
     dir: "Qwen2.5-Coder-1.5B-GGUF",
     gguf: "Qwen2.5-Coder-1.5B.Q4_K_M.gguf",
+    ub: 512,
+    b: 512,
 };
 
 /// Catalog for Settings model dropdown (order = display order).
 pub const FIM_MODEL_CATALOG: &[FimModelOption] = &[CODEGEMMA_2B, QWEN25_CODER_15B];
+
+/// Look up a catalog entry by stable id.
+pub fn find_model(id: &str) -> Option<FimModelOption> {
+    FIM_MODEL_CATALOG.iter().copied().find(|m| m.id == id)
+}
+
+/// Default model id when settings omit `autocomplete_model`.
+pub fn default_model_id() -> &'static str {
+    CODEGEMMA_2B.id
+}
 
 #[cfg(test)]
 mod tests {
@@ -59,6 +76,10 @@ mod tests {
             QWEN25_CODER_15B.relative_model_path(),
             "Qwen2.5-Coder-1.5B-GGUF/Qwen2.5-Coder-1.5B.Q4_K_M.gguf"
         );
+        assert_eq!(CODEGEMMA_2B.ub, 512);
+        assert_eq!(CODEGEMMA_2B.b, 512);
+        assert_eq!(QWEN25_CODER_15B.ub, 512);
+        assert_eq!(QWEN25_CODER_15B.b, 512);
         assert!(FIM_MODEL_CATALOG.len() >= 2);
     }
 }

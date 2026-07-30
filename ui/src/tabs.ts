@@ -19,6 +19,11 @@ export interface TabsBinding {
   openTemporaryFile(name: string, content?: string): string;
   openVirtualFile(path: string, name: string, content?: string): void;
   /**
+   * Open or focus a clean special tab (e.g. Settings). Does not mark dirty.
+   * Caller owns rendering a non-editor center pane when the path is active.
+   */
+  openSpecialTab(path: string, name: string): void;
+  /**
    * Open a real on-disk `path` using already-read `content`. Opens clean (not dirty).
    * Prefer `open()` for normal files — this bypasses binary classification.
    */
@@ -59,12 +64,24 @@ export interface TabsBinding {
   render(): void;
 }
 
+/** Virtual tab key for the Settings editor pane (not an on-disk file). */
+export const SETTINGS_TAB_PATH = "h1code:settings";
+
 export function isUntitledPath(path: string): boolean {
   return path.startsWith("untitled:");
 }
 
 export function isTemporaryPath(path: string): boolean {
   return path.startsWith("untitled:") || path.startsWith("scratch:");
+}
+
+export function isSettingsPath(path: string): boolean {
+  return path === SETTINGS_TAB_PATH;
+}
+
+/** Paths that are not real workspace files (untitled, scratch, Settings, …). */
+export function isVirtualPath(path: string): boolean {
+  return isTemporaryPath(path) || isSettingsPath(path);
 }
 
 function isNotTextFileError(err: unknown): boolean {
@@ -197,6 +214,12 @@ export function mountTabs(host: HTMLElement): TabsBinding {
     openVirtualFile(path: string, name: string, content = "") {
       if (!tabs.has(path)) {
         insertTab(path, name, content, "text", true);
+      }
+      api.setActive(path);
+    },
+    openSpecialTab(path: string, name: string) {
+      if (!tabs.has(path)) {
+        insertTab(path, name, "", "text", false);
       }
       api.setActive(path);
     },

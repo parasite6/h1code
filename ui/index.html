@@ -19,6 +19,13 @@
           No workspace
         </span>
         <span class="spacer"></span>
+        <button id="btn-settings" title="Settings (Ctrl+,)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Settings
+        </button>
         <button id="btn-save" title="Save Active File (Ctrl+S)">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -199,6 +206,73 @@
               </div>
               <div id="editor" class="hidden"></div>
               <div id="media-viewer" class="hidden" aria-live="polite"></div>
+              <div id="settings-viewer" class="hidden" aria-live="polite">
+                <div class="settings-viewer-inner">
+                  <h1 class="settings-viewer-title">Settings</h1>
+                  <div id="settings-empty" class="settings-empty">
+                    Open a folder to edit workspace settings.
+                  </div>
+                  <div id="settings-body" class="settings-panel-body hidden">
+                    <section class="settings-section" aria-labelledby="settings-ac-title">
+                      <h2 id="settings-ac-title" class="settings-section-title">Autocomplete</h2>
+                      <p class="settings-section-desc">
+                        Local FIM ghost text via llama-server. When enabled, the IDE starts the server for you (loopback endpoint only).
+                      </p>
+                      <label class="settings-row settings-toggle">
+                        <span>Enable autocomplete</span>
+                        <input type="checkbox" id="settings-ac-enabled" />
+                      </label>
+                      <label class="settings-field">
+                        <span class="settings-label">Model</span>
+                        <select id="settings-ac-model"></select>
+                      </label>
+                      <div class="settings-model-actions">
+                        <button
+                          type="button"
+                          id="settings-ac-start"
+                          class="settings-action-btn"
+                          title="Start llama-server for the selected model"
+                        >
+                          Start
+                        </button>
+                        <button
+                          type="button"
+                          id="settings-ac-stop"
+                          class="settings-action-btn"
+                          title="Stop the IDE-managed llama-server"
+                        >
+                          Stop
+                        </button>
+                      </div>
+                      <p id="settings-ac-server-hint" class="settings-meta">
+                        Auto-starts when autocomplete is enabled. Leave path empty to auto-discover PATH / ~/llama-cuda/llama-b*.
+                      </p>
+                      <label class="settings-field">
+                        <span class="settings-label">Endpoint</span>
+                        <input
+                          id="settings-ac-endpoint"
+                          type="text"
+                          spellcheck="false"
+                          autocomplete="off"
+                          placeholder="http://127.0.0.1:8081"
+                        />
+                      </label>
+                      <label class="settings-field">
+                        <span class="settings-label">llama-server path</span>
+                        <input
+                          id="settings-ac-llama-path"
+                          type="text"
+                          spellcheck="false"
+                          autocomplete="off"
+                          placeholder="/home/you/llama-cuda/llama-b10189/llama-server"
+                        />
+                      </label>
+                      <p id="settings-ac-meta" class="settings-meta"></p>
+                    </section>
+                    <div id="settings-status" class="settings-status"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div id="preview-resizer" class="resizer vertical-resizer hidden"></div>

@@ -2,7 +2,7 @@
 // Keeps baselines (mtime/size), tree drift dots, and the active-buffer banner.
 
 import { ipc, type CoreEvent, type FileStat } from "./ipc";
-import { isTemporaryPath, type Tab, type TabsBinding } from "./tabs";
+import { isVirtualPath, type Tab, type TabsBinding } from "./tabs";
 import type { ExplorerBinding } from "./explorer";
 import type { EditorBinding } from "./editor";
 
@@ -96,7 +96,7 @@ export function createFileSync(deps: FileSyncDeps): FileSyncBinding {
   }
 
   function isDiskBacked(path: string): boolean {
-    return !isTemporaryPath(path);
+    return !isVirtualPath(path);
   }
 
   async function noteBaseline(path: string, stat?: FileStat | null): Promise<void> {

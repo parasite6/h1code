@@ -77,40 +77,45 @@ See `crates/ide-cli/src/main.rs` for the full command list.
 
 ## FIM autocomplete (opt-in)
 
-Local fill-in-the-middle suggestions via an external `llama-server`. Off by default.
+Local fill-in-the-middle suggestions via `llama-server`. Off by default.
 
-FIM client logic was adapted from [`vendor/llama.vscode`](vendor/llama.vscode/) ([ggml-org/llama.vscode](https://github.com/ggml-org/llama.vscode), **MIT**). Model GGUF trees live at the project root and are gitignored (not shipped on clone).
+FIM client logic was adapted from [`vendor/llama.vscode`](vendor/llama.vscode/) ([ggml-org/llama.vscode](https://github.com/ggml-org/llama.vscode), **MIT**). Model GGUF trees live at the **workspace root** and are gitignored (not shipped on clone).
 
-1. Place a FIM-capable GGUF under the project root (examples already used locally):
+1. Place a FIM-capable GGUF under the workspace root (examples already used locally):
 
 - `codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf`
 - `Qwen2.5-Coder-1.5B-GGUF/Qwen2.5-Coder-1.5B.Q4_K_M.gguf`
 
-2. Launch `llama-server` from the project root (adjust the server binary to your install):
+2. Put `llama-server` on your `PATH`, leave path empty for auto-discovery (`~/llama-cuda/llama-b*`, `~/llama-b*`, …), **or** set an absolute path in Settings (many llama.cpp installs are not on PATH):
+
+```toml
+# .h1code/settings.toml
+autocomplete_enabled = true
+# optional when not on PATH / not in common locations:
+llama_server_path = "/home/you/llama-cuda/llama-b10189/llama-server"
+# optional: autocomplete_endpoint = "http://127.0.0.1:8081"
+# optional: autocomplete_model = "codegemma-2b-q4_k_m"
+```
+
+3. Enable autocomplete via the topbar **Settings** button (or **File → Settings** / `Ctrl+,`). On workspace open (and when you toggle Enable / click **Start**), the IDE spawns:
 
 ```bash
-# from the <h1code> repo root
+llama-server \
+  -m "<workspace>/<model>.gguf" \
+  --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
+```
+
+If a healthy server is already listening on the endpoint port, the IDE reuses it and does **not** claim ownership. **Start** / **Stop** spawn or kill only an IDE-owned process. Closing the IDE (or the workspace) stops an owned server; an externally started server is left alone.
+
+Equivalent manual launch from the workspace root:
+
+```bash
 llama-server \
   -m "./codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf" \
   --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
 ```
 
-Or with Qwen2.5-Coder 1.5B:
-
-```bash
-llama-server \
-  -m "./Qwen2.5-Coder-1.5B-GGUF/Qwen2.5-Coder-1.5B.Q4_K_M.gguf" \
-  --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
-```
-
-3. In the workspace, create/edit `.h1code/settings.toml`:
-
-```toml
-autocomplete_enabled = true
-# optional: autocomplete_endpoint = "http://127.0.0.1:8081"
-```
-
-4. Re-open the workspace (or restart). Ghost text appears after a short debounce; **Tab** accepts, otherwise Tab still indents.
+Ghost text appears after a short debounce; **Tab** accepts, otherwise Tab still indents.
 
 HTML/CSS files discard completions that look like React/PHP/template injections (`useState`, `onChange={`, `<?php`, `{{`, `@foreach`).
 

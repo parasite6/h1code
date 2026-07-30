@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod llama_infill;
+mod llama_lifecycle;
 mod preview;
 
 use std::path::{Path, PathBuf};
@@ -12,10 +13,12 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, RunEvent, State};
 use tracing_subscriber::EnvFilter;
 
-use ide_core::autocomplete_settings::{self, AutocompleteSettings};
+use ide_core::autocomplete_settings::{
+    self, AutocompleteSettings, AutocompleteSettingsUpdate,
+};
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
 use ide_core::fim_models::{self, FimModelOption};
 use ide_core::fs_service::{DirEntry, FileSniff, FileStat, FsService};
@@ -43,6 +46,7 @@ struct AppState {
     search_index: SearchIndexService,
     settings: SettingsStore,
     preview: PreviewHandle,
+    llama: llama_lifecycle::LlamaHandle,
 }
 
 fn main() {
@@ -71,6 +75,7 @@ fn main() {
     let settings = SettingsStore::new(SettingsStore::default_user_path())
         .expect("failed to initialize settings store");
     let preview = preview::new_handle();
+    let llama = llama_lifecycle::new_handle();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -84,6 +89,7 @@ fn main() {
             search_index,
             settings,
             preview,
+            llama,
         })
         .setup(move |app| {
             // Bridge ide-core events -> webview events.
@@ -141,12 +147,26 @@ fn main() {
             cmd_preview_reload_url,
             cmd_preview_get_state,
             cmd_autocomplete_settings_get,
+            cmd_autocomplete_settings_set,
             cmd_fim_models_list,
+            cmd_llama_server_start,
+            cmd_llama_server_stop,
+            cmd_llama_server_status,
+            cmd_llama_server_ensure,
             cmd_llama_infill,
             cmd_llama_infill_warmup,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::Exit = event {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    // Kill only the Child we spawned — never a port-scan of 8081.
+                    llama_lifecycle::on_ide_exit(&state.llama);
+                    let _ = preview::kill_chrome(&state.preview);
+                }
+            }
+        });
 }
 
 fn to_err<E: std::fmt::Display>(e: E) -> String {
@@ -164,6 +184,8 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
     state.search_index.stop();
     state.fs.stop_watching();
     preview::clear_for_workspace_change(&state.preview);
+    // Drop IDE-owned llama-server from the previous workspace; ensure below may respawn.
+    let _ = llama_lifecycle::stop(&state.llama);
     let info = state.workspace.open(&path).map_err(to_err)?;
     state.settings.bind_workspace(&info.root).ok();
     state.bus.publish(CoreEvent::WorkspaceOpened {
@@ -210,7 +232,44 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
         });
     }
 
+    // Auto-start llama-server when autocomplete is enabled for a local endpoint.
+    // Also re-runs on every Open Folder — important after `tauri dev` Rust rebuilds
+    // (Exit kills the owned Child; re-open / ensure must respawn).
+    {
+        let llama = state.llama.clone();
+        let bus = state.bus.clone();
+        let root = info.root.clone();
+        std::thread::spawn(move || {
+            publish_llama_ensure_result(&bus, llama_lifecycle::ensure_for_workspace(&llama, &root));
+        });
+    }
+
     Ok(info)
+}
+
+fn publish_llama_ensure_result(
+    bus: &EventBus,
+    result: Result<llama_lifecycle::LlamaServerStatus, String>,
+) {
+    match result {
+        Ok(status) => {
+            if status.running || status.message.contains("disabled") {
+                bus.publish(CoreEvent::Log {
+                    level: LogLevel::Info,
+                    message: format!("llama-server: {}", status.message),
+                });
+            } else {
+                bus.publish(CoreEvent::Log {
+                    level: LogLevel::Warn,
+                    message: format!("llama-server: {}", status.message),
+                });
+            }
+        }
+        Err(e) => bus.publish(CoreEvent::Log {
+            level: LogLevel::Warn,
+            message: format!("llama-server auto-start failed: {e}"),
+        }),
+    }
 }
 
 #[tauri::command]
@@ -224,6 +283,8 @@ fn cmd_workspace_close(state: State<'_, AppState>) -> Result<(), String> {
     state.search_index.stop();
     state.fs.stop_watching();
     preview::clear_for_workspace_change(&state.preview);
+    // Stop only an IDE-owned llama-server when leaving the workspace.
+    let _ = llama_lifecycle::stop(&state.llama);
     state.workspace.close();
     state.bus.publish(CoreEvent::WorkspaceClosed);
     Ok(())
@@ -922,8 +983,52 @@ fn cmd_autocomplete_settings_get(
 }
 
 #[tauri::command(async)]
+fn cmd_autocomplete_settings_set(
+    state: State<'_, AppState>,
+    payload: AutocompleteSettingsUpdate,
+) -> Result<AutocompleteSettings, String> {
+    let root = require_workspace_root(&state)?;
+    autocomplete_settings::save_autocomplete_settings(&root, &payload).map_err(to_err)
+}
+
+#[tauri::command(async)]
 fn cmd_fim_models_list() -> Result<Vec<FimModelOption>, String> {
     Ok(fim_models::FIM_MODEL_CATALOG.to_vec())
+}
+
+#[tauri::command(async)]
+fn cmd_llama_server_start(
+    state: State<'_, AppState>,
+) -> Result<llama_lifecycle::LlamaServerStatus, String> {
+    let root = require_workspace_root(&state)?;
+    llama_lifecycle::start(&state.llama, &root)
+}
+
+#[tauri::command(async)]
+fn cmd_llama_server_stop(
+    state: State<'_, AppState>,
+) -> Result<llama_lifecycle::LlamaServerStatus, String> {
+    llama_lifecycle::stop(&state.llama)
+}
+
+#[tauri::command(async)]
+fn cmd_llama_server_status(
+    state: State<'_, AppState>,
+) -> Result<llama_lifecycle::LlamaServerStatus, String> {
+    Ok(llama_lifecycle::status(&state.llama))
+}
+
+/// Re-run auto-start for the current workspace (no-op when autocomplete is off).
+/// Used after `tauri dev` / HMR bootstrap when the shell already has a workspace
+/// open but the owned Child may have been killed on Exit.
+#[tauri::command(async)]
+fn cmd_llama_server_ensure(
+    state: State<'_, AppState>,
+) -> Result<llama_lifecycle::LlamaServerStatus, String> {
+    let root = require_workspace_root(&state)?;
+    let result = llama_lifecycle::ensure_for_workspace(&state.llama, &root);
+    publish_llama_ensure_result(&state.bus, result.clone());
+    result
 }
 
 #[tauri::command(async)]
