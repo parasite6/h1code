@@ -1,12 +1,10 @@
 // Live HTML preview: docked iframe in the split pane; optional pop-out
-// (Tauri WebviewWindow or system Chrome --app). Engine preference only
-// chooses the pop-out host — docked content always stays in the panel.
+// via system Chrome --app only. Untrusted preview HTML must never load in
+// a Tauri WebviewWindow (that would share app IPC capabilities with main).
 
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ipc, type PreviewEngine } from "./ipc";
 
 const WIDTH_KEY = "h1code.previewWidth";
-const POPOUT_LABEL = "preview-popout";
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 220;
 const MAX_WIDTH_RATIO = 0.7;
@@ -126,19 +124,10 @@ export function mountPreview(opts: PreviewMountOpts): PreviewBinding {
   }
 
   function showDockedFrame(show: boolean) {
-    // Placeholder only when Chrome is popped out (external window owns the view).
-    const chromeExternal = poppedOut && engine === "chrome";
+    // Placeholder only when Chrome owns the external pop-out window.
+    const chromeExternal = poppedOut;
     opts.chromePlaceholderEl.classList.toggle("hidden", !chromeExternal);
     opts.frameEl.classList.toggle("hidden", chromeExternal || !show);
-  }
-
-  async function closePopoutWindow() {
-    try {
-      const existing = await WebviewWindow.getByLabel(POPOUT_LABEL);
-      if (existing) await existing.close();
-    } catch {
-      // ignore
-    }
   }
 
   async function persistPoppedOut(value: boolean) {
@@ -151,57 +140,39 @@ export function mountPreview(opts: PreviewMountOpts): PreviewBinding {
     }
   }
 
+  /** Ensure engine preference is Chrome when using external pop-out. */
+  async function ensureChromeEngine(): Promise<void> {
+    if (engine === "chrome") return;
+    try {
+      engine = await ipc.previewSetEngine("chrome");
+      updateEngineButton();
+    } catch (e) {
+      opts.onLog?.(`Failed to set Chrome engine for pop-out: ${String(e)}`);
+    }
+  }
+
   /** Show preview in the split-pane iframe (both engines when docked). */
   async function showDocked(url: string) {
     await ipc.previewKillChrome().catch(() => {});
-    await closePopoutWindow();
     showDockedFrame(true);
     opts.frameEl.src = cacheBust(url);
     setStatus("docked", engine === "chrome");
   }
 
-  /** Detached surface: Chrome app window or Tauri WebviewWindow. */
+  /** Detached surface: system Chrome --app only (never a Tauri webview). */
   async function showPoppedOut(url: string) {
     const busted = cacheBust(url);
     clearIframe();
-
-    if (engine === "chrome") {
-      await closePopoutWindow();
-      showDockedFrame(false);
+    await ensureChromeEngine();
+    showDockedFrame(false);
+    try {
       await ipc.previewSpawnChrome(busted);
       setStatus("popout", true);
-      return;
+    } catch (e) {
+      opts.onLog?.(`Preview pop-out failed: ${String(e)}`);
+      await persistPoppedOut(false);
+      if (currentUrl) await showDocked(currentUrl);
     }
-
-    await ipc.previewKillChrome().catch(() => {});
-    showDockedFrame(false);
-    const existing = await WebviewWindow.getByLabel(POPOUT_LABEL);
-    if (existing) await existing.close();
-
-    const win = new WebviewWindow(POPOUT_LABEL, {
-      url: busted,
-      title: "Preview",
-      width: 900,
-      height: 700,
-      focus: true,
-    });
-    win.once("tauri://error", (e) => {
-      opts.onLog?.(
-        `Preview pop-out failed: ${String((e as { payload?: unknown }).payload ?? e)}`
-      );
-      void persistPoppedOut(false).then(() => {
-        if (currentUrl) void showDocked(currentUrl);
-      });
-    });
-    win.once("tauri://destroyed", () => {
-      if (!poppedOut) return;
-      void persistPoppedOut(false).then(() => {
-        if (open && currentUrl && engine === "tauri") {
-          void showDocked(currentUrl);
-        }
-      });
-    });
-    setStatus("popout", false);
   }
 
   async function applyUrl(url: string) {
@@ -234,7 +205,6 @@ export function mountPreview(opts: PreviewMountOpts): PreviewBinding {
   }
 
   async function close(): Promise<void> {
-    await closePopoutWindow();
     await ipc.previewKillChrome().catch(() => {});
     await ipc.previewClose().catch(() => {});
     clearIframe();
@@ -263,6 +233,10 @@ export function mountPreview(opts: PreviewMountOpts): PreviewBinding {
     if (!open) return;
     const next: PreviewEngine = engine === "tauri" ? "chrome" : "tauri";
     try {
+      // Tauri is docked-iframe only; switching to it while popped out docks.
+      if (next === "tauri" && poppedOut) {
+        await persistPoppedOut(false);
+      }
       engine = await ipc.previewSetEngine(next);
       updateEngineButton();
       if (currentUrl) await applyUrl(currentUrl);
@@ -316,6 +290,9 @@ export function mountPreview(opts: PreviewMountOpts): PreviewBinding {
     reload,
     currentFile: () => currentFile,
     setEngine: async (next) => {
+      if (next === "tauri" && poppedOut) {
+        await persistPoppedOut(false);
+      }
       engine = await ipc.previewSetEngine(next);
       updateEngineButton();
       if (open && currentUrl) await applyUrl(currentUrl);
