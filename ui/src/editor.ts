@@ -1,53 +1,35 @@
-// Editor: a single CodeMirror 6 instance whose document is swapped when the
+// Editor: a single Monaco instance whose document is swapped when the
 // active tab changes. Editor-local state (cursor, selection) lives here.
 //
 // Diagnostics flow:
-//   setDiagnostics(items) -> dispatches @codemirror/lint's setDiagnostics
-//   effect with positions converted from (line, character) -> doc offsets.
+//   setDiagnostics(items) -> monaco.editor.setModelMarkers with positions
+//   from LSP-style (line, character) ranges.
 
+import { ensureMonacoEnvironment } from "./monacoEnv";
+import * as monaco from "monaco-editor";
+// Relative path bypasses monaco-editor package "exports" (blocks CSS subpaths).
+import "../node_modules/monaco-editor/min/vs/editor/editor.main.css";
 import {
-  EditorState,
-  Compartment,
-  EditorSelection,
-  Annotation,
-  Text,
-  countColumn,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  EditorView,
-  keymap,
-  lineNumbers,
-  highlightActiveLine,
-  drawSelection,
-  dropCursor,
-  Decoration,
-  type DecorationSet,
-  type KeyBinding,
-  type Command,
-} from "@codemirror/view";
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentMore,
-  indentLess,
-  insertNewlineAndIndent,
-} from "@codemirror/commands";
-import { python } from "@codemirror/lang-python";
-import {
-  indentUnit,
-  getIndentation,
-  IndentContext,
-  indentString,
-} from "@codemirror/language";
-import {
-  linter,
-  lintGutter,
-  setDiagnostics as cmSetDiagnostics,
-  type Diagnostic as CMDiagnostic,
-} from "@codemirror/lint";
+  attachMarkupDiagnostics,
+  clearMarkupMarkers,
+  applyMarkupDiagnostics,
+} from "./markupDiagnostics";
+
+const SEARCH_MATCH_STYLE_ID = "h1code-monaco-search-match-style";
+
+function ensureSearchMatchStyles(): void {
+  if (document.getElementById(SEARCH_MATCH_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = SEARCH_MATCH_STYLE_ID;
+  style.textContent = `
+#editor .monaco-search-match,
+.monaco-editor .monaco-search-match {
+  background-color: rgba(234, 156, 52, 0.45) !important;
+  outline: 1px solid rgba(234, 156, 52, 0.7);
+}
+`;
+  document.head.appendChild(style);
+}
 
 export interface DiagnosticItem {
   severity: "error" | "warning" | "info" | "hint";
@@ -60,11 +42,16 @@ export interface DiagnosticItem {
   };
 }
 
+/** Minimal stand-in for the former CodeMirror EditorView surface used by main.ts. */
+export interface EditorViewShim {
+  requestMeasure(): void;
+}
+
 export interface EditorBinding {
   setDoc(text: string, filePath: string): void;
   getDoc(): string;
   focus(): void;
-  view: EditorView;
+  view: EditorViewShim;
   /** Tear down the view (HMR / remount). Safe to call more than once. */
   destroy(): void;
   /** Push the diagnostic set for the currently-displayed doc. */
@@ -77,300 +64,488 @@ export interface EditorBinding {
   jumpTo(line: number, col: number, endCol?: number): void;
 }
 
-// Tag programmatic doc swaps so the change listener doesn't treat them as
-// user edits (which would mark the tab dirty and re-trigger didChange).
-const ProgrammaticDocSet = Annotation.define<boolean>();
+const INDENT_UNIT = "    ";
+const TAB_SIZE = 4;
+const MARKER_OWNER = "h1code";
 
 // Above this size (in characters) we open files without language highlighting.
-// The Lezer parser is the dominant cost for large docs; CodeMirror's own line
-// virtualization handles plain text of this size comfortably.
 const LARGE_FILE_PLAIN_THRESHOLD = 1_000_000;
 
-/** Singleton so Vite HMR / remount cannot leave two live EditorViews. */
-let mountedView: EditorView | null = null;
+const THEME_NAME = "h1code-dark";
 
-function destroyMountedView() {
-  if (mountedView) {
-    mountedView.destroy();
-    mountedView = null;
+/** Singleton so Vite HMR / remount cannot leave two live editors. */
+let mountedEditor: monaco.editor.IStandaloneCodeEditor | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+function destroyMountedEditor() {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  if (mountedEditor) {
+    mountedEditor.dispose();
+    mountedEditor = null;
   }
 }
 
 /** Destroy the live editor, if any. Used by Vite HMR dispose. */
 export function destroyEditor() {
-  destroyMountedView();
+  destroyMountedEditor();
+}
+
+function languageForPath(filePath: string, plain: boolean): string {
+  if (plain) return "plaintext";
+  const base = filePath.split(/[/\\]/).pop() ?? filePath;
+  const dot = base.lastIndexOf(".");
+  const ext = dot >= 0 ? base.slice(dot).toLowerCase() : "";
+  switch (ext) {
+    case ".ts":
+    case ".tsx":
+    case ".mts":
+    case ".cts":
+      return "typescript";
+    case ".js":
+    case ".jsx":
+    case ".mjs":
+    case ".cjs":
+      return "javascript";
+    case ".html":
+    case ".htm":
+      return "html";
+    case ".css":
+      return "css";
+    case ".py":
+      return "python";
+    default:
+      return "plaintext";
+  }
+}
+
+function countColumns(text: string, tabSize: number): number {
+  let col = 0;
+  for (const ch of text) {
+    if (ch === "\t") col += tabSize - (col % tabSize);
+    else col += 1;
+  }
+  return col;
+}
+
+function spacesForColumns(columns: number): string {
+  return " ".repeat(Math.max(0, columns));
+}
+
+function defineH1codeTheme(): void {
+  monaco.editor.defineTheme(THEME_NAME, {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#1e1e1e",
+      "editor.foreground": "#d4d4d4",
+      "editorCursor.foreground": "#aeafad",
+      // Faint accent tint — must stay visually distinct from selection (#264f78).
+      "editor.lineHighlightBackground": "#007ACC1A",
+      "editor.lineHighlightBorder": "#00000000",
+      "editor.selectionBackground": "#264f78",
+      "editor.inactiveSelectionBackground": "#264f7880",
+      "editorGutter.background": "#1e1e1e",
+      "editorLineNumber.foreground": "#5a5a5a",
+      "editorLineNumber.activeForeground": "#8e8e93",
+      "editorWidget.background": "#252526",
+      "editorWidget.border": "#3c3c3c",
+      // Squiggly underlines use border vars — empty border = invisible markers.
+      "editorError.foreground": "#f14c4c",
+      "editorError.border": "#f14c4c",
+      "editorWarning.foreground": "#cca700",
+      "editorWarning.border": "#cca700",
+      "editorInfo.foreground": "#3794ff",
+      "editorInfo.border": "#3794ff",
+      "editorHint.foreground": "#eeeeee",
+      "editorHint.border": "#eeeeee",
+    },
+  });
+}
+
+function looksLikeBracketPair(
+  model: monaco.editor.ITextModel,
+  position: monaco.Position
+): boolean {
+  if (position.column < 2) return false;
+  const around = model.getValueInRange({
+    startLineNumber: position.lineNumber,
+    startColumn: position.column - 1,
+    endLineNumber: position.lineNumber,
+    endColumn: position.column + 1,
+  });
+  return /\(\)|\[\]|\{\}/.test(around);
 }
 
 /**
  * Tab: insert indent-unit whitespace at the cursor when there is no selection
- * and the caret is not at column 0. Whole-line indent (indentMore) only when
- * there is a selection or the caret is at the start of the line.
- *
- * Stock `indentWithTab` always calls indentMore — that is bug (a).
+ * and the caret is not at column 0. Whole-line indent only when there is a
+ * selection or the caret is at the start of the line.
  */
-const insertOrIndentTab: Command = (view) => {
-  const { state } = view;
-  if (state.readOnly) return false;
-  const indentWholeLine = state.selection.ranges.some((range) => {
-    if (!range.empty) return true;
-    return range.head === state.doc.lineAt(range.head).from;
+function runInsertOrIndentTab(editor: monaco.editor.IStandaloneCodeEditor): void {
+  const model = editor.getModel();
+  if (!model || model.isDisposed()) return;
+  const sels = editor.getSelections() ?? [];
+  const indentWholeLine = sels.some((sel) => {
+    if (!sel.isEmpty()) return true;
+    return sel.getPosition().column === 1;
   });
-  if (indentWholeLine) return indentMore(view);
-  const unit = state.facet(indentUnit);
-  view.dispatch(
-    state.update(state.replaceSelection(unit), {
-      scrollIntoView: true,
-      userEvent: "input",
-    })
-  );
-  return true;
-};
-
-/**
- * Enter: like insertNewlineAndIndent, but when splitting mid-line do not let
- * a syntax-indent of 0 strip leading whitespace that already belongs to the
- * text moving onto the new line (bug (b) after merge / mid-line split).
- */
-const insertNewlinePreserveLineIndent: Command = (view) => {
-  const { state } = view;
-  if (state.readOnly) return false;
-
-  // Bracket-pair explode stays with the stock command.
-  for (const range of state.selection.ranges) {
-    if (range.empty && looksLikeBracketPair(state, range.head)) {
-      return insertNewlineAndIndent(view);
-    }
+  if (indentWholeLine) {
+    editor.trigger("keyboard", "editor.action.indentLines", null);
+    return;
   }
-
-  const changes = state.changeByRange((range) => {
-    let { from, to } = range;
-    const line = state.doc.lineAt(from);
-    const cx = new IndentContext(state, { simulateBreak: from });
-    let indent = getIndentation(cx, from);
-    if (indent == null) {
-      indent = countColumn(/^\s*/.exec(line.text)![0], state.tabSize);
-    }
-
-    // Text after the caret may already carry indent (e.g. after merging an
-    // indented block line upward). Preserve at least that many columns.
-    const after = line.text.slice(from - line.from);
-    const afterLead = /^\s*/.exec(after)![0];
-    indent = Math.max(indent, countColumn(afterLead, state.tabSize));
-
-    let end = to;
-    while (end < line.to && /\s/.test(line.text[end - line.from]!)) end++;
-
-    let start = from;
-    if (
-      from > line.from &&
-      from < line.from + 100 &&
-      !/\S/.test(line.text.slice(0, from - line.from))
-    ) {
-      start = line.from;
-    }
-
-    const insertLines = ["", indentString(state, indent)];
-    return {
-      changes: { from: start, to: end, insert: Text.of(insertLines) },
-      range: EditorSelection.cursor(start + 1 + insertLines[1]!.length),
-    };
-  });
-
-  view.dispatch(
-    state.update(changes, { scrollIntoView: true, userEvent: "input" })
-  );
-  return true;
-};
-
-function looksLikeBracketPair(state: EditorState, pos: number): boolean {
-  if (pos <= 0 || pos >= state.doc.length) return false;
-  return /\(\)|\[\]|\{\}/.test(state.sliceDoc(pos - 1, pos + 1));
+  editor.executeEdits("h1code-tab", [
+    {
+      range: editor.getSelection()!,
+      text: INDENT_UNIT,
+      forceMoveMarkers: true,
+    },
+  ]);
 }
 
-/** Keymap that overrides stock Tab / Enter. Must be registered *after* defaultKeymap. */
-const indentKeymap: KeyBinding[] = [
-  { key: "Tab", run: insertOrIndentTab, shift: indentLess },
-  { key: "Enter", run: insertNewlinePreserveLineIndent, shift: insertNewlinePreserveLineIndent },
-];
+/**
+ * Enter: preserve/continue indent; after a line-merge / mid-line split, do not
+ * let a weaker indent strip leading whitespace that already belongs to the
+ * text moving onto the new line.
+ */
+function runInsertNewlinePreserveLineIndent(
+  editor: monaco.editor.IStandaloneCodeEditor
+): void {
+  const model = editor.getModel();
+  if (!model || model.isDisposed()) return;
 
-/** Temporary find-match span from search-result navigation. */
-const setSearchMatch = StateEffect.define<{ from: number; to: number } | null>();
+  const sel = editor.getSelection();
+  if (!sel) return;
 
-const searchMatchMark = Decoration.mark({ class: "cm-searchMatch" });
+  // Bracket-pair explode: insert blank line with extra indent between the pair.
+  if (sel.isEmpty() && looksLikeBracketPair(model, sel.getPosition())) {
+    const pos = sel.getPosition();
+    const lineText = model.getLineContent(pos.lineNumber);
+    const lead = /^\s*/.exec(lineText)![0];
+    const baseIndent = countColumns(lead, TAB_SIZE);
+    const inner = spacesForColumns(baseIndent + TAB_SIZE);
+    const outer = spacesForColumns(baseIndent);
+    const range = new monaco.Range(
+      pos.lineNumber,
+      pos.column - 1,
+      pos.lineNumber,
+      pos.column + 1
+    );
+    const open = model.getValueInRange({
+      startLineNumber: pos.lineNumber,
+      startColumn: pos.column - 1,
+      endLineNumber: pos.lineNumber,
+      endColumn: pos.column,
+    });
+    const close = model.getValueInRange({
+      startLineNumber: pos.lineNumber,
+      startColumn: pos.column,
+      endLineNumber: pos.lineNumber,
+      endColumn: pos.column + 1,
+    });
+    const insert = `${open}\n${inner}\n${outer}${close}`;
+    editor.executeEdits("h1code-enter", [
+      { range, text: insert, forceMoveMarkers: true },
+    ]);
+    editor.setPosition({
+      lineNumber: pos.lineNumber + 1,
+      column: inner.length + 1,
+    });
+    return;
+  }
 
-const searchMatchField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(deco, tr) {
-    deco = deco.map(tr.changes);
-    for (const e of tr.effects) {
-      if (e.is(setSearchMatch)) {
-        if (e.value == null || e.value.from >= e.value.to) {
-          deco = Decoration.none;
-        } else {
-          deco = Decoration.set([searchMatchMark.range(e.value.from, e.value.to)]);
-        }
-      }
+  let fromLine = sel.startLineNumber;
+  let fromCol = sel.startColumn;
+  let toLine = sel.endLineNumber;
+  let toCol = sel.endColumn;
+  if (
+    fromLine > toLine ||
+    (fromLine === toLine && fromCol > toCol)
+  ) {
+    [fromLine, toLine] = [toLine, fromLine];
+    [fromCol, toCol] = [toCol, fromCol];
+  }
+
+  const lineText = model.getLineContent(fromLine);
+  const lead = /^\s*/.exec(lineText)![0];
+  let indent = countColumns(lead, TAB_SIZE);
+
+  const after = lineText.slice(fromCol - 1);
+  const afterLead = /^\s*/.exec(after)![0];
+  indent = Math.max(indent, countColumns(afterLead, TAB_SIZE));
+
+  // Eat whitespace immediately after the selection end (same line only for simplicity).
+  let endCol = toCol;
+  if (toLine === fromLine) {
+    while (endCol <= lineText.length && /\s/.test(lineText[endCol - 1]!)) {
+      endCol++;
     }
-    // Drop the highlight once the user edits the document.
-    if (tr.docChanged && !tr.effects.some((e) => e.is(setSearchMatch))) {
-      deco = Decoration.none;
-    }
-    return deco;
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
+  }
+
+  let startCol = fromCol;
+  if (
+    fromCol > 1 &&
+    fromCol < 101 &&
+    !/\S/.test(lineText.slice(0, fromCol - 1))
+  ) {
+    startCol = 1;
+  }
+
+  const indentText = spacesForColumns(indent);
+  const insert = `\n${indentText}`;
+  editor.executeEdits("h1code-enter", [
+    {
+      range: new monaco.Range(fromLine, startCol, toLine, endCol),
+      text: insert,
+      forceMoveMarkers: true,
+    },
+  ]);
+  editor.setPosition({
+    lineNumber: fromLine + 1,
+    column: indentText.length + 1,
+  });
+}
 
 export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBinding {
-  // Hot reload re-runs bootstrap without a full document reload; destroy any
-  // prior view so keymaps/updateListeners are never double-registered.
-  destroyMountedView();
+  ensureMonacoEnvironment();
+  ensureSearchMatchStyles();
+  destroyMountedEditor();
   parent.replaceChildren();
 
-  const language = new Compartment();
-  const view = new EditorView({
-    parent,
-    state: EditorState.create({
-      doc: "",
-      extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        history(),
-        // Python convention: 4-space indent unit (affects Tab insert + auto-indent).
-        indentUnit.of("    "),
-        // Draw the caret ourselves and hide the native one. WebView zoom
-        // otherwise leaves a frozen native caret beside the live one.
-        drawSelection(),
-        dropCursor(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
-        // Later keymap wins over defaultKeymap's Tab/Enter bindings.
-        keymap.of(indentKeymap),
-        language.of(python()),
-        // Install the lint state field with a no-op source. We push the actual
-        // diagnostics imperatively via setDiagnostics().
-        linter(() => [], { delay: 100000 }),
-        lintGutter(),
-        searchMatchField,
-        EditorView.theme(
-          {
-            "&": { backgroundColor: "#1e1e1e", color: "#d4d4d4", height: "100%" },
-            // Hide the browser caret; only .cm-cursor from drawSelection is shown.
-            ".cm-content": { caretColor: "transparent" },
-            ".cm-cursor, .cm-dropCursor": {
-              borderLeftColor: "#aeafad",
-              borderLeftWidth: "1.2px",
-            },
-            ".cm-gutters": {
-              backgroundColor: "#1e1e1e",
-              color: "#5a5a5a",
-              border: "none",
-            },
-            // Active line: muted accent tint (matches --accent-bg). Kept subtle so
-            // it never reads like selection (#264f78) or search-match orange.
-            ".cm-activeLine": { backgroundColor: "rgba(0, 122, 204, 0.10)" },
-            ".cm-activeLineGutter": { backgroundColor: "rgba(0, 122, 204, 0.10)" },
-            ".cm-selectionBackground, .cm-content ::selection": {
-              backgroundColor: "#264f78 !important",
-            },
-            // Find-match span: orange tint, distinct from active-line and selection.
-            ".cm-searchMatch": {
-              backgroundColor: "rgba(234, 156, 52, 0.45)",
-              outline: "1px solid rgba(234, 156, 52, 0.7)",
-            },
-            ".cm-tooltip.cm-tooltip-lint": {
-              backgroundColor: "#252526",
-              border: "1px solid #3c3c3c",
-              color: "#d4d4d4",
-            },
-          },
-          { dark: true }
-        ),
-        EditorView.updateListener.of((u) => {
-          if (!u.docChanged) return;
-          if (u.transactions.some((t) => t.annotation(ProgrammaticDocSet))) return;
-          onChange();
-        }),
-      ],
-    }),
-  });
-  mountedView = view;
+  defineH1codeTheme();
+  monaco.editor.setTheme(THEME_NAME);
 
-  function clampLineChar(line: number, character: number): number {
-    const doc = view.state.doc;
-    const ln = Math.max(1, Math.min(line + 1, doc.lines));
-    const lineObj = doc.line(ln);
-    const ch = Math.max(0, Math.min(character, lineObj.length));
-    return lineObj.from + ch;
+  // CSS: Monaco's built-in worker validation (validate + DiagnosticsAdapter).
+  // HTML: Monaco 0.56 dropped doValidation on the HTML worker — we use
+  // markupDiagnostics.ts instead (see attachMarkupDiagnostics below).
+  try {
+    const { cssDefaults } = monaco.css;
+    cssDefaults.setOptions({ validate: true });
+    cssDefaults.setModeConfiguration({
+      ...cssDefaults.modeConfiguration,
+      diagnostics: true,
+    });
+  } catch {
+    /* optional — our lightweight CSS checker still runs */
   }
+
+  let programmatic = false;
+  let searchDecorationIds: string[] = [];
+
+  const editor = monaco.editor.create(parent, {
+    value: "",
+    language: "python",
+    theme: THEME_NAME,
+    automaticLayout: false,
+    fontFamily:
+      '"Fira Code", "JetBrains Mono", Consolas, Menlo, Monaco, "Courier New", monospace',
+    fontSize: 12,
+    lineNumbers: "on",
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    renderLineHighlight: "line",
+    renderLineHighlightOnlyWhenFocus: false,
+    cursorBlinking: "solid",
+    cursorStyle: "line",
+    cursorWidth: 1,
+    insertSpaces: true,
+    tabSize: TAB_SIZE,
+    detectIndentation: false,
+    wordWrap: "off",
+    folding: true,
+    glyphMargin: true,
+    padding: { top: 0, bottom: 0 },
+    overviewRulerLanes: 2,
+    fixedOverflowWidgets: true,
+    // Keep occurrence/selection-word highlights from competing with find-match orange.
+    selectionHighlight: false,
+    occurrencesHighlight: "off",
+    // Disable stock Tab-accepts-suggestion stealing Tab when we want indent.
+    tabCompletion: "off",
+    suggest: { showWords: false },
+    quickSuggestions: false,
+    parameterHints: { enabled: false },
+    hover: { enabled: "on" },
+    renderValidationDecorations: "on",
+  });
+  mountedEditor = editor;
+
+  const markupDiagnostics = attachMarkupDiagnostics(editor);
+
+  const clearSearchMatch = () => {
+    searchDecorationIds = editor.deltaDecorations(searchDecorationIds, []);
+  };
+
+  editor.onDidChangeModelContent(() => {
+    if (programmatic) return;
+    clearSearchMatch();
+    onChange();
+  });
+
+  // Override Tab / Enter (must win over default indent/suggest handlers).
+  editor.addCommand(monaco.KeyCode.Tab, () => runInsertOrIndentTab(editor));
+  editor.addCommand(
+    monaco.KeyMod.Shift | monaco.KeyCode.Tab,
+    () => editor.trigger("keyboard", "editor.action.outdentLines", null)
+  );
+  editor.addCommand(monaco.KeyCode.Enter, () =>
+    runInsertNewlinePreserveLineIndent(editor)
+  );
+  editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Enter, () =>
+    runInsertNewlinePreserveLineIndent(editor)
+  );
+
+  // Dev/verify harness hooks (monaco-verify.html).
+  if (import.meta.env.DEV) {
+    (window as unknown as { __h1codeEditorTest?: object }).__h1codeEditorTest = {
+      runTab: () => runInsertOrIndentTab(editor),
+      runEnter: () => runInsertNewlinePreserveLineIndent(editor),
+      getLanguageId: () => editor.getModel()?.getLanguageId() ?? null,
+      getEditor: () => editor,
+      setDiagnostics: (items: DiagnosticItem[]) => {
+        // Reuse binding path — assigned after return is awkward; call markers here.
+        const model = editor.getModel();
+        if (!model) return;
+        const markers: monaco.editor.IMarkerData[] = items.map((d) => {
+          const severity =
+            d.severity === "error"
+              ? monaco.MarkerSeverity.Error
+              : d.severity === "warning"
+                ? monaco.MarkerSeverity.Warning
+                : d.severity === "hint"
+                  ? monaco.MarkerSeverity.Hint
+                  : monaco.MarkerSeverity.Info;
+          return {
+            severity,
+            message: d.message,
+            code: d.code ?? undefined,
+            source: d.source ?? undefined,
+            startLineNumber: d.range.start.line + 1,
+            startColumn: d.range.start.character + 1,
+            endLineNumber: d.range.end.line + 1,
+            endColumn: Math.max(
+              d.range.end.character + 1,
+              d.range.start.character + 2
+            ),
+          };
+        });
+        monaco.editor.setModelMarkers(model, MARKER_OWNER, markers);
+      },
+      getMarkers: () => {
+        const model = editor.getModel();
+        if (!model) return [];
+        return monaco.editor.getModelMarkers({ resource: model.uri });
+      },
+    };
+  }
+
+  resizeObserver = new ResizeObserver(() => {
+    editor.layout();
+  });
+  resizeObserver.observe(parent);
+
+  const view: EditorViewShim = {
+    requestMeasure() {
+      editor.layout();
+    },
+  };
 
   return {
     view,
     destroy() {
-      if (mountedView === view) {
-        destroyMountedView();
+      markupDiagnostics.dispose();
+      if (mountedEditor === editor) {
+        destroyMountedEditor();
       } else {
-        view.destroy();
+        editor.dispose();
       }
     },
     setDoc(text, filePath) {
-      void filePath;
-      // Large files: drop the Lezer language parser. Running Python (Lezer)
-      // highlighting over multi-MB files (e.g. a 19MB HTML) locks the UI. Plain
-      // text has no per-token parse cost, so big files open instantly.
+      const model = editor.getModel();
+      if (!model) return;
       const plain = text.length > LARGE_FILE_PLAIN_THRESHOLD;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        effects: [
-          language.reconfigure(plain ? [] : python()),
-          setSearchMatch.of(null),
-        ],
-        annotations: ProgrammaticDocSet.of(true),
-      });
-      // Reset diagnostics when the document is replaced; the caller is expected
-      // to push the current file's set immediately after.
-      view.dispatch(cmSetDiagnostics(view.state, []));
+      const lang = languageForPath(filePath, plain);
+      programmatic = true;
+      try {
+        clearSearchMatch();
+        monaco.editor.setModelMarkers(model, MARKER_OWNER, []);
+        clearMarkupMarkers(model);
+        // Avoid pushing an identical setValue that still fires events.
+        if (model.getValue() !== text) {
+          model.setValue(text);
+        }
+        monaco.editor.setModelLanguage(model, lang);
+      } finally {
+        programmatic = false;
+      }
+      // Re-run HTML/CSS structural checks for the new doc/language.
+      applyMarkupDiagnostics(model);
     },
     getDoc() {
-      return view.state.doc.toString();
+      return editor.getValue();
     },
     focus() {
-      view.focus();
+      editor.focus();
     },
     setDiagnostics(items) {
-      const mapped: CMDiagnostic[] = items.map((d) => {
-        const from = clampLineChar(d.range.start.line, d.range.start.character);
-        let to = clampLineChar(d.range.end.line, d.range.end.character);
-        if (to <= from) to = Math.min(view.state.doc.length, from + 1);
+      const model = editor.getModel();
+      if (!model) return;
+      const markers: monaco.editor.IMarkerData[] = items.map((d) => {
+        const severity =
+          d.severity === "error"
+            ? monaco.MarkerSeverity.Error
+            : d.severity === "warning"
+              ? monaco.MarkerSeverity.Warning
+              : d.severity === "hint"
+                ? monaco.MarkerSeverity.Hint
+                : monaco.MarkerSeverity.Info;
         return {
-          from,
-          to,
-          severity: d.severity === "hint" ? "info" : d.severity,
+          severity,
           message: d.message,
-          source: d.source ?? d.code ?? undefined,
+          code: d.code ?? undefined,
+          source: d.source ?? undefined,
+          startLineNumber: d.range.start.line + 1,
+          startColumn: d.range.start.character + 1,
+          endLineNumber: d.range.end.line + 1,
+          endColumn: Math.max(
+            d.range.end.character + 1,
+            d.range.start.character + 2
+          ),
         };
       });
-      view.dispatch(cmSetDiagnostics(view.state, mapped));
+      monaco.editor.setModelMarkers(model, MARKER_OWNER, markers);
     },
     jumpTo(line, col, endCol) {
-      const doc = view.state.doc;
-      const ln = Math.max(1, Math.min(line, doc.lines));
-      const lineObj = doc.line(ln);
-      const from = Math.min(lineObj.from + Math.max(0, col - 1), lineObj.to);
-      const to =
-        endCol != null
-          ? Math.min(lineObj.from + Math.max(0, endCol - 1), lineObj.to)
-          : from;
-      const hasMatch = to > from;
-      view.dispatch({
-        // Anchor at end, head at start so the caret sits on the match start.
-        selection: hasMatch
-          ? EditorSelection.single(to, from)
-          : EditorSelection.single(from),
-        effects: setSearchMatch.of(hasMatch ? { from, to } : null),
-        scrollIntoView: true,
-      });
-      view.focus();
+      const model = editor.getModel();
+      if (!model) return;
+      const lineCount = model.getLineCount();
+      const ln = Math.max(1, Math.min(line, lineCount));
+      const maxCol = model.getLineMaxColumn(ln);
+      const fromCol = Math.min(Math.max(1, col), maxCol);
+      const toCol =
+        endCol != null ? Math.min(Math.max(1, endCol), maxCol) : fromCol;
+      const hasMatch = toCol > fromCol;
+
+      if (hasMatch) {
+        // Selection so caret sits on match start (anchor at end, head at start).
+        editor.setSelection(new monaco.Selection(ln, toCol, ln, fromCol));
+        searchDecorationIds = editor.deltaDecorations(searchDecorationIds, [
+          {
+            range: new monaco.Range(ln, fromCol, ln, toCol),
+            options: {
+              inlineClassName: "monaco-search-match",
+              stickiness:
+                monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+            },
+          },
+        ]);
+      } else {
+        clearSearchMatch();
+        editor.setPosition({ lineNumber: ln, column: fromCol });
+      }
+      editor.revealLineInCenter(ln);
+      editor.focus();
     },
   };
 }

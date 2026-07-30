@@ -12,4 +12,10 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  optimizeDeps: {
+    include: ["monaco-editor"],
+  },
+  worker: {
+    format: "es",
+  },
 });

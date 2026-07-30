@@ -2957,7 +2957,10 @@ async function bootstrap() {
                 const ok = await openWorkspace(targetPath, false, true);
                 recentDebug("repro.write.afterOpen", {
                   ok,
-                  workspace: currentWorkspace?.root ?? null,
+                  // Cast: TS keeps null narrowing across await openWorkspace().
+                  workspace: currentWorkspace
+                    ? (currentWorkspace as WorkspaceInfo).root
+                    : null,
                   recentPaths: recentProjects.map((p) => p.path),
                 });
                 // Close workspace so empty-state render can show recents in-session.
