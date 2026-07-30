@@ -131,6 +131,28 @@ export interface FileStat {
   is_dir: boolean | null;
 }
 
+export type PreviewEngine = "tauri" | "chrome";
+
+export interface PreviewServerInfo {
+  port: number;
+  baseUrl: string;
+}
+
+export interface PreviewOpenResult {
+  url: string;
+  engine: PreviewEngine;
+  baseUrl: string;
+  isPoppedOut: boolean;
+}
+
+export interface PreviewStateSnapshot {
+  engine: PreviewEngine;
+  port: number | null;
+  hasServer: boolean;
+  chromeRunning: boolean;
+  isPoppedOut: boolean;
+}
+
 export const ipc = {
   workspaceOpen: (path: string) =>
     invoke<WorkspaceInfo>("cmd_workspace_open", { path }),
@@ -209,6 +231,24 @@ export const ipc = {
     invoke<void>("cmd_doc_did_save", { path, text }),
   docDidClose: (path: string) =>
     invoke<void>("cmd_doc_did_close", { path }),
+  previewEnsureServer: () =>
+    invoke<PreviewServerInfo>("cmd_preview_ensure_server"),
+  previewOpen: (filePath: string) =>
+    invoke<PreviewOpenResult>("cmd_preview_open", { filePath }),
+  previewClose: () => invoke<void>("cmd_preview_close"),
+  previewSetEngine: (engine: PreviewEngine) =>
+    invoke<PreviewEngine>("cmd_preview_set_engine", { payload: { engine } }),
+  previewSetPoppedOut: (isPoppedOut: boolean) =>
+    invoke<boolean>("cmd_preview_set_popped_out", {
+      payload: { isPoppedOut },
+    }),
+  previewSpawnChrome: (url: string) =>
+    invoke<void>("cmd_preview_spawn_chrome", { payload: { url } }),
+  previewKillChrome: () => invoke<void>("cmd_preview_kill_chrome"),
+  previewReloadUrl: (filePath: string) =>
+    invoke<string>("cmd_preview_reload_url", { payload: { filePath } }),
+  previewGetState: () =>
+    invoke<PreviewStateSnapshot>("cmd_preview_get_state"),
 };
 
 function escapeForLog(value: string) {

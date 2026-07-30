@@ -10,6 +10,8 @@ pub mod errors;
 pub mod events;
 pub mod fs_service;
 pub mod lsp;
+pub mod preview_server;
+pub mod preview_settings;
 pub mod process;
 pub mod pty;
 pub mod pyright;

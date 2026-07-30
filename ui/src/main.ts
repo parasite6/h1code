@@ -15,6 +15,7 @@ import { confirmSave, confirmDialog, promptName, type SaveDecision } from "./mod
 import { mountTerminal } from "./terminal";
 import { mountProblems, type ProblemEntry } from "./problems";
 import { mountSearch } from "./search";
+import { mountPreview } from "./preview";
 import {
   chooseRunTarget,
   rememberRunTarget,
@@ -80,6 +81,18 @@ async function bootstrap() {
   const runTargetSuggestion = $("run-target-suggestion");
   const runTargetCurrent = $("run-target-current");
   const runTargetSuppress = $("run-target-suppress");
+  const preview = mountPreview({
+    centerEl: $("center"),
+    paneEl: $("preview-pane"),
+    resizerEl: $("preview-resizer"),
+    frameEl: $("preview-frame") as HTMLIFrameElement,
+    chromePlaceholderEl: $("preview-chrome-placeholder"),
+    statusEl: document.querySelector(".preview-status") as HTMLElement,
+    engineBtn: $("btn-preview-engine") as HTMLButtonElement,
+    popoutBtn: $("btn-preview-popout") as HTMLButtonElement,
+    closeBtn: $("btn-preview-close") as HTMLButtonElement,
+    onLog: (message) => terminal.log(message, { newPrompt: true }),
+  });
   terminal.onFocusChange((focused) => {
     terminalFocused = focused;
   });
@@ -103,6 +116,15 @@ async function bootstrap() {
         ipc.docDidClose(path).catch(() => {});
         ipc.docDidOpen(path, content).catch(() => {});
       }
+      if (
+        preview.isOpen() &&
+        preview.currentFile() &&
+        normPath(path) === normPath(preview.currentFile()!)
+      ) {
+        preview.reload(path).catch((err) =>
+          terminal.log(`preview reload failed: ${String(err)}`, { newPrompt: true })
+        );
+      }
     },
     onDocRenamed: (from, to) => {
       const diagnostic = diagnostics.get(normPath(from));
@@ -117,6 +139,13 @@ async function bootstrap() {
       const tab = tabs.get(to);
       if (tab && /\.pyi?$/i.test(to) && tab.content.length <= PYRIGHT_MAX_DOC_CHARS) {
         ipc.docDidOpen(to, tab.content).catch(() => {});
+      }
+      if (preview.isOpen() && preview.currentFile() && normPath(from) === normPath(preview.currentFile()!)) {
+        if (/\.html?$/i.test(to)) {
+          preview.open(to).catch(() => {});
+        } else {
+          preview.close().catch(() => {});
+        }
       }
     },
     onSaveAs: () => {
@@ -714,6 +743,7 @@ async function bootstrap() {
       return false;
     }
     await cleanupRunTempDir();
+    preview.resetLocal();
     fileSync.clear();
     // Drop any leftover tabs (untitled or dirty) before swapping workspace.
     for (const tab of tabs.all()) {
@@ -1081,6 +1111,11 @@ async function bootstrap() {
         persistWorkspaceTabState().catch(() => {});
       }
       fileSync.onActiveTab(tab);
+      if (preview.isOpen() && /\.html?$/i.test(tab.path) && !isTemporaryPath(tab.path)) {
+        preview.open(tab.path).catch((err) =>
+          terminal.log(`preview failed: ${String(err)}`, { newPrompt: true })
+        );
+      }
     } else {
       showEditor(false);
       editor.setDoc("", "");
@@ -1167,6 +1202,16 @@ async function bootstrap() {
     if (active && !isTemporaryPath(active.path)) {
       fileSync.clearDrift(active.path);
       await fileSync.noteBaseline(active.path);
+    }
+    if (
+      active &&
+      preview.isOpen() &&
+      preview.currentFile() &&
+      normPath(active.path) === normPath(preview.currentFile()!)
+    ) {
+      preview.reload(active.path).catch((err) =>
+        terminal.log(`preview reload failed: ${String(err)}`, { newPrompt: true })
+      );
     }
   };
 
@@ -1662,6 +1707,35 @@ async function bootstrap() {
     await openShell();
   };
 
+  $("btn-preview").onclick = async () => {
+    if (!currentWorkspace) {
+      terminal.log("Open a workspace folder to use Live Preview.", { newPrompt: true });
+      return;
+    }
+    if (preview.isOpen()) {
+      await preview.close();
+      return;
+    }
+    const active = tabs.active();
+    let target =
+      active && /\.html?$/i.test(active.path) && !isTemporaryPath(active.path)
+        ? active.path
+        : null;
+    if (!target) {
+      const htmlTab = tabs.all().find((t) => /\.html?$/i.test(t.path) && !isTemporaryPath(t.path));
+      target = htmlTab?.path ?? null;
+    }
+    if (!target) {
+      terminal.log("Open an HTML file to preview.", { newPrompt: true });
+      return;
+    }
+    try {
+      await preview.open(target);
+    } catch (err) {
+      terminal.log(`preview failed: ${String(err)}`, { newPrompt: true });
+    }
+  };
+
   async function runFile(path: string) {
     // Remember prior mode before snapshot/cleanup so a restored shell isn't
     // mis-classified after prepareRunTempSnapshot touches PTYs.
@@ -1807,6 +1881,7 @@ async function bootstrap() {
 
     if (evt.kind === "workspace_closed") {
       void cleanupRunTempDir();
+      preview.resetLocal();
       fileSync.clear();
       currentWorkspace = null;
       scratchWorkspace = null;

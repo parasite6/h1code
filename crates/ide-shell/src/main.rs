@@ -4,6 +4,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod preview;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -14,6 +16,7 @@ use tracing_subscriber::EnvFilter;
 
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
 use ide_core::fs_service::{DirEntry, FileStat, FsService};
+use ide_core::preview_settings::PreviewEngine;
 use ide_core::process::ProcessRunner;
 use ide_core::pty::{PtyManager, PtySpec};
 use ide_core::pyright::PyrightManager;
@@ -24,6 +27,8 @@ use ide_core::search_index::{SearchIndexService, SearchIndexStatus};
 use ide_core::settings::SettingsStore;
 use ide_core::workspace::{Workspace, WorkspaceInfo};
 
+use preview::{PreviewHandle, PreviewOpenResult, PreviewServerInfo, PreviewStateSnapshot};
+
 struct AppState {
     bus: EventBus,
     workspace: Workspace,
@@ -33,6 +38,7 @@ struct AppState {
     pyright: PyrightManager,
     search_index: SearchIndexService,
     settings: SettingsStore,
+    preview: PreviewHandle,
 }
 
 fn main() {
@@ -60,6 +66,7 @@ fn main() {
     let search_index = SearchIndexService::new(bus.clone());
     let settings = SettingsStore::new(SettingsStore::default_user_path())
         .expect("failed to initialize settings store");
+    let preview = preview::new_handle();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -72,6 +79,7 @@ fn main() {
             pyright,
             search_index,
             settings,
+            preview,
         })
         .setup(move |app| {
             // Bridge ide-core events -> webview events.
@@ -116,6 +124,15 @@ fn main() {
             cmd_doc_did_change,
             cmd_doc_did_save,
             cmd_doc_did_close,
+            cmd_preview_ensure_server,
+            cmd_preview_open,
+            cmd_preview_close,
+            cmd_preview_set_engine,
+            cmd_preview_set_popped_out,
+            cmd_preview_spawn_chrome,
+            cmd_preview_kill_chrome,
+            cmd_preview_reload_url,
+            cmd_preview_get_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -135,6 +152,7 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
     state.pyright.stop();
     state.search_index.stop();
     state.fs.stop_watching();
+    preview::clear_for_workspace_change(&state.preview);
     let info = state.workspace.open(&path).map_err(to_err)?;
     state.settings.bind_workspace(&info.root).ok();
     state.bus.publish(CoreEvent::WorkspaceOpened {
@@ -188,11 +206,13 @@ fn cmd_workspace_open(state: State<'_, AppState>, path: String) -> Result<Worksp
 fn cmd_workspace_close(state: State<'_, AppState>) -> Result<(), String> {
     if state.workspace.current().is_none() {
         state.fs.stop_watching();
+        preview::clear_for_workspace_change(&state.preview);
         return Ok(());
     }
     state.pyright.stop();
     state.search_index.stop();
     state.fs.stop_watching();
+    preview::clear_for_workspace_change(&state.preview);
     state.workspace.close();
     state.bus.publish(CoreEvent::WorkspaceClosed);
     Ok(())
@@ -705,6 +725,101 @@ fn cmd_doc_did_save(
 fn cmd_doc_did_close(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let _ = state.pyright.did_close(Path::new(&path));
     Ok(())
+}
+
+// ---------- Live preview ----------
+
+fn require_workspace_root(state: &AppState) -> Result<PathBuf, String> {
+    state.workspace.root().map_err(to_err)
+}
+
+#[tauri::command(async)]
+fn cmd_preview_ensure_server(state: State<'_, AppState>) -> Result<PreviewServerInfo, String> {
+    let root = require_workspace_root(&state)?;
+    preview::ensure_server(&state.preview, &root)
+}
+
+#[tauri::command(async)]
+fn cmd_preview_open(
+    state: State<'_, AppState>,
+    file_path: String,
+) -> Result<PreviewOpenResult, String> {
+    let root = require_workspace_root(&state)?;
+    preview::open_file(&state.preview, &root, &file_path)
+}
+
+#[tauri::command(async)]
+fn cmd_preview_close(state: State<'_, AppState>) -> Result<(), String> {
+    preview::close(&state.preview, true)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewEnginePayload {
+    engine: PreviewEngine,
+}
+
+#[tauri::command(async)]
+fn cmd_preview_set_engine(
+    state: State<'_, AppState>,
+    payload: PreviewEnginePayload,
+) -> Result<PreviewEngine, String> {
+    let root = require_workspace_root(&state)?;
+    preview::set_engine(&state.preview, &root, payload.engine)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewPoppedOutPayload {
+    is_popped_out: bool,
+}
+
+#[tauri::command(async)]
+fn cmd_preview_set_popped_out(
+    state: State<'_, AppState>,
+    payload: PreviewPoppedOutPayload,
+) -> Result<bool, String> {
+    let root = require_workspace_root(&state)?;
+    preview::set_is_popped_out(&state.preview, &root, payload.is_popped_out)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewUrlPayload {
+    url: String,
+}
+
+#[tauri::command(async)]
+fn cmd_preview_spawn_chrome(
+    state: State<'_, AppState>,
+    payload: PreviewUrlPayload,
+) -> Result<(), String> {
+    preview::spawn_chrome(&state.preview, &payload.url)
+}
+
+#[tauri::command(async)]
+fn cmd_preview_kill_chrome(state: State<'_, AppState>) -> Result<(), String> {
+    preview::kill_chrome(&state.preview)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewFilePayload {
+    file_path: String,
+}
+
+#[tauri::command(async)]
+fn cmd_preview_reload_url(
+    state: State<'_, AppState>,
+    payload: PreviewFilePayload,
+) -> Result<String, String> {
+    let root = require_workspace_root(&state)?;
+    preview::reload_url(&state.preview, &root, &payload.file_path)
+}
+
+#[tauri::command(async)]
+fn cmd_preview_get_state(state: State<'_, AppState>) -> Result<PreviewStateSnapshot, String> {
+    Ok(preview::get_state(&state.preview))
 }
 
 #[allow(dead_code)]
