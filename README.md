@@ -75,6 +75,29 @@ cargo run -p ide-cli -- call <command> [json]
 
 See `crates/ide-cli/src/main.rs` for the full command list.
 
+## FIM autocomplete (opt-in)
+
+Local fill-in-the-middle suggestions via an external `llama-server`. Off by default.
+
+1. Launch a FIM-capable model (example CodeGemma 2B):
+
+```bash
+/home/andrewunknown/llama-cuda/llama-b10189/llama-server \
+  -m "/run/media/andrewunknown/storage112/LM Studio/lmstudio-community/codegemma-2b-GGUF/codegemma-2b-Q4_K_M.gguf" \
+  --port 8081 -ngl 99 --ctx-size 0 -ub 512 -b 512 --cache-reuse 256
+```
+
+2. In the workspace, create/edit `.h1code/settings.toml`:
+
+```toml
+autocomplete_enabled = true
+# optional: autocomplete_endpoint = "http://127.0.0.1:8081"
+```
+
+3. Re-open the workspace (or restart). Ghost text appears after a short debounce; **Tab** accepts, otherwise Tab still indents.
+
+HTML/CSS files discard completions that look like React/PHP/template injections (`useState`, `onChange={`, `<?php`, `{{`, `@foreach`).
+
 ## Project layout
 
 ```

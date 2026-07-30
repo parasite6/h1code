@@ -164,6 +164,38 @@ export interface PreviewStateSnapshot {
   isPoppedOut: boolean;
 }
 
+export interface AutocompleteSettings {
+  enabled: boolean;
+  endpoint: string;
+  debounceMs: number;
+  nPrefix: number;
+  nSuffix: number;
+  nPredict: number;
+  maxLineSuffix: number;
+  ringNChunks: number;
+  ringChunkSize: number;
+  ringScope: number;
+}
+
+export interface InfillChunk {
+  text: string;
+  filename: string;
+  time?: number;
+}
+
+export interface InfillRequest {
+  endpoint: string;
+  inputPrefix: string;
+  inputSuffix: string;
+  prompt: string;
+  inputExtra: InfillChunk[];
+  nPredict: number;
+}
+
+export interface InfillResponse {
+  content: string;
+}
+
 export const ipc = {
   workspaceOpen: (path: string) =>
     invoke<WorkspaceInfo>("cmd_workspace_open", { path }),
@@ -267,6 +299,14 @@ export const ipc = {
     invoke<string>("cmd_preview_reload_url", { payload: { filePath } }),
   previewGetState: () =>
     invoke<PreviewStateSnapshot>("cmd_preview_get_state"),
+  autocompleteSettingsGet: () =>
+    invoke<AutocompleteSettings>("cmd_autocomplete_settings_get"),
+  llamaInfill: (payload: InfillRequest) =>
+    invoke<InfillResponse>("cmd_llama_infill", { payload }),
+  llamaInfillWarmup: (payload: {
+    endpoint: string;
+    inputExtra: InfillChunk[];
+  }) => invoke<void>("cmd_llama_infill_warmup", { payload }),
 };
 
 function escapeForLog(value: string) {

@@ -37,6 +37,7 @@ regex = "1"
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+ureq = { version = "2", default-features = false, features = ["json"] }
 
 [profile.release]
 lto = "thin"

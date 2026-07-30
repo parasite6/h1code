@@ -14,6 +14,11 @@ import {
   clearMarkupMarkers,
   applyMarkupDiagnostics,
 } from "./markupDiagnostics";
+import {
+  attachAutocomplete,
+  tryAcceptInlineSuggestion,
+  type AutocompleteBinding,
+} from "./autocomplete";
 
 const SEARCH_MATCH_STYLE_ID = "h1code-monaco-search-match-style";
 
@@ -62,6 +67,8 @@ export interface EditorBinding {
    * with a find-match highlight (search result navigation).
    */
   jumpTo(line: number, col: number, endCol?: number): void;
+  /** Reload FIM autocomplete settings from `.h1code/settings.toml`. */
+  reloadAutocompleteSettings(): Promise<void>;
 }
 
 const INDENT_UNIT = "    ";
@@ -76,10 +83,13 @@ const THEME_NAME = "h1code-dark";
 /** Singleton so Vite HMR / remount cannot leave two live editors. */
 let mountedEditor: monaco.editor.IStandaloneCodeEditor | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let mountedAutocomplete: AutocompleteBinding | null = null;
 
 function destroyMountedEditor() {
   resizeObserver?.disconnect();
   resizeObserver = null;
+  mountedAutocomplete?.dispose();
+  mountedAutocomplete = null;
   if (mountedEditor) {
     mountedEditor.dispose();
     mountedEditor = null;
@@ -362,16 +372,20 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
     selectionHighlight: false,
     occurrencesHighlight: "off",
     // Disable stock Tab-accepts-suggestion stealing Tab when we want indent.
+    // FIM ghost-text uses inlineSuggest; Tab handler accepts that first.
     tabCompletion: "off",
     suggest: { showWords: false },
     quickSuggestions: false,
     parameterHints: { enabled: false },
+    inlineSuggest: { enabled: false },
     hover: { enabled: "on" },
     renderValidationDecorations: "on",
   });
   mountedEditor = editor;
 
   const markupDiagnostics = attachMarkupDiagnostics(editor);
+  const autocomplete: AutocompleteBinding = attachAutocomplete(editor);
+  mountedAutocomplete = autocomplete;
 
   const clearSearchMatch = () => {
     searchDecorationIds = editor.deltaDecorations(searchDecorationIds, []);
@@ -383,8 +397,11 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
     onChange();
   });
 
-  // Override Tab / Enter (must win over default indent/suggest handlers).
-  editor.addCommand(monaco.KeyCode.Tab, () => runInsertOrIndentTab(editor));
+  // Tab: accept FIM ghost text when visible, else indent (no dual-caret path).
+  editor.addCommand(monaco.KeyCode.Tab, () => {
+    if (tryAcceptInlineSuggestion(editor)) return;
+    runInsertOrIndentTab(editor);
+  });
   editor.addCommand(
     monaco.KeyMod.Shift | monaco.KeyCode.Tab,
     () => editor.trigger("keyboard", "editor.action.outdentLines", null)
@@ -454,6 +471,10 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
   return {
     view,
     destroy() {
+      if (mountedAutocomplete === autocomplete) {
+        mountedAutocomplete = null;
+      }
+      autocomplete.dispose();
       markupDiagnostics.dispose();
       if (mountedEditor === editor) {
         destroyMountedEditor();
@@ -479,6 +500,7 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
       } finally {
         programmatic = false;
       }
+      autocomplete.setFilePath(filePath);
       // Re-run HTML/CSS structural checks for the new doc/language.
       applyMarkupDiagnostics(model);
     },
@@ -487,6 +509,9 @@ export function mountEditor(parent: HTMLElement, onChange: () => void): EditorBi
     },
     focus() {
       editor.focus();
+    },
+    reloadAutocompleteSettings() {
+      return autocomplete.reloadSettings();
     },
     setDiagnostics(items) {
       const model = editor.getModel();

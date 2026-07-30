@@ -4,6 +4,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod llama_infill;
 mod preview;
 
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ use serde_json::{Map, Value};
 use tauri::{Emitter, State};
 use tracing_subscriber::EnvFilter;
 
+use ide_core::autocomplete_settings::{self, AutocompleteSettings};
 use ide_core::events::{Event as CoreEvent, EventBus, LogLevel};
 use ide_core::fs_service::{DirEntry, FileSniff, FileStat, FsService};
 use ide_core::path_jail;
@@ -137,6 +139,9 @@ fn main() {
             cmd_preview_kill_chrome,
             cmd_preview_reload_url,
             cmd_preview_get_state,
+            cmd_autocomplete_settings_get,
+            cmd_llama_infill,
+            cmd_llama_infill_warmup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -904,6 +909,27 @@ fn cmd_preview_reload_url(
 #[tauri::command(async)]
 fn cmd_preview_get_state(state: State<'_, AppState>) -> Result<PreviewStateSnapshot, String> {
     Ok(preview::get_state(&state.preview))
+}
+
+#[tauri::command(async)]
+fn cmd_autocomplete_settings_get(
+    state: State<'_, AppState>,
+) -> Result<AutocompleteSettings, String> {
+    let root = require_workspace_root(&state)?;
+    Ok(autocomplete_settings::load_autocomplete_settings(&root))
+}
+
+#[tauri::command(async)]
+fn cmd_llama_infill(
+    payload: llama_infill::InfillRequest,
+) -> Result<llama_infill::InfillResponse, String> {
+    llama_infill::infill(payload)
+}
+
+#[tauri::command(async)]
+fn cmd_llama_infill_warmup(payload: llama_infill::InfillWarmupRequest) -> Result<(), String> {
+    // Warm-up is best-effort; surface errors so the UI can ignore quietly.
+    llama_infill::infill_warmup(payload)
 }
 
 #[allow(dead_code)]

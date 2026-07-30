@@ -4,6 +4,7 @@
 //! external tooling drivers (Pyright, Ruff, debugpy, pytest, uv) sit on top of
 //! these primitives via the command/event surface.
 
+pub mod autocomplete_settings;
 pub mod commands;
 pub mod dap;
 pub mod errors;

@@ -1002,6 +1002,7 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      await editor.reloadAutocompleteSettings().catch(() => {});
       recentDebug("openWorkspace.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
       if (restoreLastActiveFile) {
@@ -1641,6 +1642,7 @@ async function bootstrap() {
       updateWorkspaceUi(info);
       await explorer.setRoot(info.root);
       search.setWorkspaceRoot(info.root);
+      await editor.reloadAutocompleteSettings().catch(() => {});
       recentDebug("adoptWorkspaceRoot.addRecent", { root: info.root, name: info.name });
       await addToRecentProjects(info.root, info.name);
       fileSync.startCheckup();
