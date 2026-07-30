@@ -437,3 +437,4 @@ FodyWeavers.xsd
 /.h1code/
 /target-diag/
 ./h1code-*.json
+h1code-*.json
