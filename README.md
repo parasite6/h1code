@@ -2,7 +2,7 @@
 
 A focused, lightweight desktop IDE aimed at HTML development. Built as a Rust core with a Tauri + TypeScript shell.
 
-> **Status:** Still in active development. Currently stable only on **Linux**; may run on Windows (project originated there) but this is untested — other platforms are unsupported or untested.
+> **Status:** Discontinued, No longer in active development. 😢
 
 The product is branded for HTML; the current engine still includes Python run/lint tooling from earlier work, and that surface remains available while the HTML-first direction continues.
 
@@ -18,12 +18,12 @@ The product is branded for HTML; the current engine still includes Python run/li
 
 ## Architecture
 
-| Piece | Role |
-| --- | --- |
-| `crates/ide-core` | Rust engine: filesystem, workspace, process/PTY, search index, settings, Python/Ruff/Pyright helpers |
-| `crates/ide-shell` | Tauri 2 desktop app; thin IPC wrappers that forward `ide-core` events to the webview |
-| `crates/ide-cli` | Headless driver to exercise `ide-core` without the UI |
-| `ui/` | Vite + TypeScript frontend (CodeMirror, xterm.js, Tauri API) |
+| Piece              | Role                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `crates/ide-core`  | Rust engine: filesystem, workspace, process/PTY, search index, settings, Python/Ruff/Pyright helpers |
+| `crates/ide-shell` | Tauri 2 desktop app; thin IPC wrappers that forward `ide-core` events to the webview                 |
+| `crates/ide-cli`   | Headless driver to exercise `ide-core` without the UI                                                |
+| `ui/`              | Vite + TypeScript frontend (CodeMirror, xterm.js, Tauri API)                                         |
 
 Commands flow UI → Tauri invoke → `ide-core`. The UI stays thin; business logic lives in Rust.
 
@@ -163,6 +163,6 @@ HTML/CSS files discard completions that look like React/PHP/template injections 
 
 ## License
 
-None yet 😅️
+“Commons Clause” License Condition v1.0
 
-Third-party: `vendor/llama.vscode` is MIT (Copyright 2025 The llama.vscode contributors).
+Third-party: `vendor/llama.vscode` is MIT (Copyright (c) 2025 The llama.vscode contributors).
