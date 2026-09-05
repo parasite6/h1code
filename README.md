@@ -1,4 +1,4 @@
-# `<h1code>`
+# `h1code`
 
 A focused, lightweight desktop IDE aimed at HTML development. Built as a Rust core with a Tauri + TypeScript shell.
 
